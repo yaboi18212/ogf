@@ -1,0 +1,3724 @@
+#pragma once
+
+//------------------------
+//        headers        |
+//------------------------
+// SDL
+#include <SDL.h>
+#include <SDL_image.h>
+
+//#include <SDL_ttf.h>
+//#include <SDL_mixer.h>
+// Box2D
+#include <Box2D.h>
+//math
+#include <cmath>
+// vector string and I/O
+#include <vector>
+#include <unordered_map>
+#include <string>
+#include <iostream>
+// random 
+#include <random>
+// time
+#include <chrono>
+
+
+
+
+namespace ogf {
+    // predefine functions
+    int Angle_To(int X, int Y, int X1, int Y1);
+    double Distance_To(int x, int y, int x1, int y1);
+    b2Vec2 AngleAndDistance_To(int x, int y, double angle, double distance);
+
+    //------------------------
+    //        colors         |
+    //------------------------
+
+    // Define commonly used colors
+#define RED { 255, 0, 0, 255 }
+#define GREEN { 0, 255, 0, 255 }
+#define BLUE { 0, 0, 255, 255 }
+#define BLACK { 0, 0, 0, 255 }
+#define WHITE { 255, 255, 255, 255 }
+#define YELLOW { 255, 255, 0, 255 }
+#define CYAN { 0, 255, 255, 255 }
+#define MAGENTA { 255, 0, 255, 255 }
+#define ORANGE { 255, 165, 0, 255 }
+#define PURPLE { 128, 0, 128, 255 }
+#define PINK { 255, 192, 203, 255 }
+#define LIME { 0, 255, 0, 255 }
+#define BROWN { 139, 69, 19, 255 }
+#define GRAY { 128, 128, 128, 255 }
+#define LIGHT_GRAY { 192, 192, 192, 255 }
+#define DARK_GRAY { 64, 64, 64, 255 }
+#define SILVER { 192, 192, 192, 255 }
+#define GOLD { 255, 215, 0, 255 }
+#define BEIGE { 245, 245, 220, 255 }
+#define INDIGO { 75, 0, 130, 255 }
+#define VIOLET { 148, 0, 211, 255 }
+#define MAROON { 128, 0, 0, 255 }
+#define NAVY { 0, 0, 128, 255 }
+#define TEAL { 0, 128, 128, 255 }
+#define OLIVE { 128, 128, 0, 255 }
+#define SKY_BLUE { 135, 206, 235, 255 }
+
+// define other stuff
+    //earth gravity
+#define EARTH_GRAVITY {0,9.81}
+#define PHYSICS_DEBUG_DISPLAY_MODE true
+#define PHYSICS_REAL_DISPLAY_MODE false
+
+#define BG_LAYER 1
+#define GAME_LAYER 2
+#define UI_LAYER 3
+
+
+    // pi
+#ifndef M_PI
+#define M_PI = 3.14159265358979323846
+#endif
+    //------------------------
+    //        classes        |
+    // -----------------------
+    
+    struct animation {
+    private:
+        SDL_Texture* LoadGifTexture(SDL_Renderer* renderer, const char* filename) {
+            SDL_RWops* rwops = SDL_RWFromFile(filename , "rb");
+            SDL_Surface* surf = IMG_LoadGIF_RW(rwops);
+            s = surf;
+            SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surf);
+            if (!texture) {
+                std::cerr << "There was an error loading the file. most likely the file could not be read due to incorrect file type, or it could not be found.";
+                std::cout << "\n" << IMG_GetError();
+                return nullptr;
+            }
+            return texture;
+        }
+
+        SDL_Surface* s;
+    public:
+        int w, h;
+        int frameCount;
+        std::vector<SDL_Texture*> frames;
+        animation(SDL_Renderer* renderer,int frameWidth,std::string file) {
+            LoadGifTexture(renderer, file.c_str());
+            // Assuming frameWidth and frameHeight are the dimensions of each frame
+            int frameCount = s->w / frameWidth;
+
+            // Create an array or vector to store individual frame surfaces or textures
+            std::vector<SDL_Texture*> _frames;
+
+            for (int i = 0; i < frameCount; ++i) {
+                SDL_Rect srcRect = { i * frameWidth, 0, frameWidth, s->h };
+                SDL_Surface* frameSurface = SDL_CreateRGBSurface(0, frameWidth, s->h, 32, 0, 0, 0, 0);
+                SDL_BlitSurface(s, &srcRect, frameSurface, NULL);
+                _frames.push_back(SDL_CreateTextureFromSurface(renderer, frameSurface));
+            }
+            frames = _frames;
+        }
+    };
+
+    // use this namespace if you want physics in your game
+    namespace Physics {
+
+        struct type {
+        public:
+            type() {}
+            type(std::string id) {
+            }
+            float w;
+            float h;
+        };
+
+        struct camera {
+            int x = 0;
+            int y = 0;
+            int wW = 1;
+            int wH = 1;
+            double zoom = 100;
+            int PhysicsDisplayMode = PHYSICS_REAL_DISPLAY_MODE;
+            camera();
+            camera(int X, int Y, int WW, int WH) {
+                x = X;
+                y = Y;
+                wW = WW;
+                wH = WH;
+            }
+        };
+
+        struct raycast {
+
+            raycast() {}
+            raycast(b2World* worl, double _x1, double _y1, bool st,double _x, double _y, b2Body* _b1, b2Body* _b2) {
+                x1 = _x1;
+                world = worl;
+                y1 = _y1;
+                b1 = _b1;
+                b2 = _b2;
+                stop = st;
+                x = _x;
+                y = _y;
+            }
+            double x1;
+            double x;
+            double y1;
+            double y;
+            b2Body* b1;
+            b2Body* b2;
+            bool stop;
+            b2World* world;
+            b2RayCastInput inp;
+            b2RayCastOutput out;
+            b2Vec2 hitPoint;
+            bool check() {
+                b2Vec2 st = b1->GetPosition();
+                b2Vec2 en = { static_cast<float32> (x1), static_cast<float32> (y1) };
+                b2RayCastInput input;
+                inp = input;
+                input.p1 = st;
+                input.p2 = en;
+                input.maxFraction = 1;
+                b2RayCastOutput output;
+                b2Vec2 inters;
+                bool hit = false;
+                float closestFraction = 1; //start with end of line as p2
+                b2Vec2 intersectionNormal(0, 0);
+                for (b2Body* b = world->GetBodyList(); b; b = b->GetNext()) {
+                    b2Fixture* fixt = b->GetFixtureList();
+                    if (b == b1) continue;
+                    bool is = (fixt == b2->GetFixtureList());
+                    
+                    if (!fixt->RayCast(&output, input, 0)) continue;
+                    if (output.fraction < closestFraction) {
+                        hit = is;
+                        
+                        closestFraction = output.fraction;
+                        intersectionNormal = output.normal;
+                    }
+
+                }
+
+                b2Vec2 intersectionPoint = st + closestFraction * (en - st);
+                hitPoint = intersectionPoint;
+                if (!hit && !stop) hitPoint = input.p2;
+                return hit;
+            }
+        };
+
+        struct emmit {
+            bool isEmmited = false;
+
+            double destroyAtDistance = 0;
+            double angle = 0;
+            double force = 0;
+            
+            b2Body* from = nullptr;
+        };
+
+        class Obj {
+            public:
+                // Member Variables
+                type Type;
+                std::string sprite;
+                int collisions_type = 0;
+                bool isSolid = true;
+                bool DoGravity = true;
+                bool DoRotation = false;
+                double x = 0;
+                double y = 0;
+                double w = 1;
+                double h = 1;
+                float mass = 10;
+                double xVel = 0;
+                double yVel = 0;
+
+                bool playing_animation = false;
+                std::unordered_map<b2Body*, bool> col_body;
+
+                // Box2D Physics Members
+                b2Body* body = nullptr;
+                b2PolygonShape shape;
+                SDL_Renderer* rend = nullptr;
+
+                // Constructors and Initialization
+                Obj() {
+                }
+
+                // Getter for Angle
+                double Get_Angle() {
+                    return body->GetAngle();
+                }
+
+                // Setter for Angle
+                double Set_Angle(double angl) {
+                    body->SetTransform(body->GetPosition(), angl * (M_PI / 180.0));
+                    return angl;
+                }
+
+                // Setter for Position
+                void Set_Pos(double _x, double _y) {
+                    body->SetGravityScale(0);
+                    body->SetTransform({ static_cast<float32>(_x / 32 + w / 2), static_cast<float32>((_y * (-1) / 32) + (h / 2)) + 1 }, Get_Angle());
+                    body->SetGravityScale(DoGravity);
+                }
+
+                // Initialize the Object
+                void def(b2World* _world, std::unordered_map<int, Obj>* _obj, double _x, double _y, double _W, double _H, double _mass, int _type) {
+                    world = _world,
+                        x = _x / 32,
+                        y = _y / 32,
+                        w = _W / 32,
+                        h = _H / 32,
+                        type = _type,
+                        mass = _mass,
+                        obj = _obj,
+                        smass = mass;
+
+                    switch (collisions_type) {
+                    case 1:
+                        Define_Circle(x, y, w, (M_PI * w * w) / _mass, _type);
+                        break;
+                    case 2:
+                        Define_Box(x, y, w, h, w * h / _mass, _type);
+                        break;
+                    }
+                }
+
+                // Set Renderer and Camera
+                void Set_Renderer(SDL_Renderer* renderer, camera* camera) {
+                    rend = renderer;
+                    cam = camera;
+                }
+
+                void velocity(std::vector<bool> keys, double vel) {
+                    if (keys[0]) yVel = -vel; // Move up (negative y velocity)
+                    if (keys[1]) xVel = -vel; // Move left (negative x velocity)
+                    if (keys[2]) yVel = vel; // Move down (positive y velocity)
+                    if (keys[3]) xVel = vel; // Move right (positive x velocity) 
+                    if (!keys[0] and !keys[2]) yVel = 0; // Stop vertical movement when both W and S are released
+                    if (!keys[1] and !keys[3]) xVel = 0; // Stop horizontal movement when both A and D are released
+                }
+
+                
+                // Perform a Raycast and optionally draw it
+                bool RayCast(double dist, double angle, Obj* to, bool stop, bool Draw, bool ddm = PHYSICS_REAL_DISPLAY_MODE, SDL_Color color = ORANGE) {
+                    b2Vec2 s = AngleAndDistance_To(x, y, angle, dist);
+                    raycast rc = {
+                        world,
+                        s.x / 32,
+                        s.y / -32,
+                        stop,
+                        x / 32 + w / 2,
+                        y / 32 + h / 2,
+                        body,
+                        to->body,
+                    };
+                    bool out = rc.check();
+
+                    // Display ray if requested
+                    if (Draw) {
+                        if (rend != nullptr && cam != nullptr) {
+                            SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                            if (ddm == PHYSICS_REAL_DISPLAY_MODE)
+                                SDL_RenderDrawLine(rend, x - cam->x, y - cam->y, rc.hitPoint.x * 32, rc.hitPoint.y * -32);
+                            if (ddm == PHYSICS_DEBUG_DISPLAY_MODE)
+                                SDL_RenderDrawLine(rend, x * 16, y * 16, rc.inp.p2.x, rc.inp.p2.y);
+                        }
+                        else {
+                            std::cerr << "renderer is not defined. Use Set_Renderer() to set your renderer (Window.rend)." << "\n";
+                        }
+                    }
+                    return out;
+                }
+
+                // Detect objects in proximity and optionally draw them
+                std::unordered_map<b2Body*, bool> proximity(double rad, bool circle, bool draw, bool ddm = PHYSICS_REAL_DISPLAY_MODE, SDL_Color color = BLACK) {
+                    std::unordered_map<b2Body*, bool> out;
+                    b2Body* proxy;
+
+                    // Create either a circle or square proxy shape
+                    if (circle) {
+                        b2CircleShape circleShape;
+                        circleShape.m_radius = rad / 32;
+
+                        b2FixtureDef fixtureDef;
+                        fixtureDef.shape = &circleShape;
+                        fixtureDef.density = 1.0f;
+                        fixtureDef.isSensor = true;
+
+                        b2BodyDef bodyDef;
+                        bodyDef.type = b2_staticBody;
+                        bodyDef.position.Set(x / 32, y / 32);
+
+                        proxy = world->CreateBody(&bodyDef);
+                        proxy->CreateFixture(&fixtureDef);
+                    }
+                    else {
+                        b2PolygonShape squareShape;
+                        squareShape.SetAsBox(rad / 16, rad / 16);
+
+                        b2FixtureDef fixtureDef;
+                        fixtureDef.shape = &squareShape;
+                        fixtureDef.density = 1.0f;
+                        fixtureDef.isSensor = true;
+
+                        b2BodyDef bodyDef;
+                        bodyDef.type = b2_staticBody;
+                        bodyDef.position.Set(x / 32 - rad / 64, y / 32 - rad / 64);
+
+                        proxy = world->CreateBody(&bodyDef);
+                        proxy->CreateFixture(&fixtureDef);
+                    }
+
+                    world->Step(0.00000001, 0.00000001, 0.00000001);
+
+                    // Detect contacts and store them in the 'out' map
+                    b2ContactEdge* c = proxy->GetContactList();
+                    int contacta = 0;
+                    while (c) {
+                        auto contact = c->contact;
+                        auto fixtureB = contact->GetFixtureB();
+                        bool touching = contact->IsTouching();
+                        out[fixtureB->GetBody()] = touching;
+                        if (touching) contacta++;
+                        c = c->next;
+                    }
+                    std::cout << contacta;
+
+                    // Render the proxy shape if requested
+                    if (rend != nullptr && cam != nullptr) {
+                        if (!circle) {
+                            if (ddm == PHYSICS_REAL_DISPLAY_MODE) {
+                                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                                SDL_Rect r = { x - rad / 2 + w * 16, y - rad / 2 + h * 16, rad, rad };
+                                SDL_RenderDrawRect(rend, &r);
+                            }
+                            if (ddm == PHYSICS_DEBUG_DISPLAY_MODE) {
+                                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                                SDL_Rect r = { x / 32 - rad / 64 + w / 2, y / 32 - rad / 64 + h / 2, rad / 32, rad / 32 };
+                                SDL_RenderDrawRect(rend, &r);
+                            }
+                        }
+                        else {
+                            b2Vec2 last = AngleAndDistance_To(x + w * 16, y * 16, 0, rad / 2);
+                            b2Vec2 first = last;
+                            for (int angle = 1; angle <= 360; angle++) {
+                                b2Vec2 point = AngleAndDistance_To(x + w * 16, y + h * 16, angle, rad / 2);
+                                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                                SDL_RenderDrawLine(rend, last.x, last.y, point.x, point.y);
+                                last = point;
+                            }
+                        }
+                    }
+
+                    // Destroy the proxy body
+                    world->DestroyBody(proxy);
+                    return out;
+                }
+                std::unordered_map<int, Obj> * obj = {};
+
+                SDL_Point Set_Camera(camera* cam) {
+                    if (cam->PhysicsDisplayMode = PHYSICS_REAL_DISPLAY_MODE) {
+                        cam->x = x + w * 16 - cam->wW / 2;
+                        cam->y = y + h * 16 - cam->wH / 2;
+                        return { cam->x, cam->y };
+                    }
+                }
+
+                bool operator==(const Obj b) {
+                    return (body == b.body);
+                }
+
+                int Emmit(int w, int h, double force, double angle) {
+
+                }
+
+                // Update Object
+                void Update() {
+
+                    // Get velocity
+                    if (em != nullptr) {
+                        if (Distance_To(x, y, em->from->GetPosition().x * 32, em->from->GetPosition().y * 32) > em->destroyAtDistance) Destroy();
+                        ApplyAngularVelocity(em->force, em->angle);
+                    }
+                    _Velocity();
+
+                    // Set user data for collision callbacks
+                    Obj* o = this;
+                    body->SetUserData(reinterpret_cast<void*>(o));
+
+                    // Get position
+                    x = body->GetPosition().x - w / 2;
+                    y = -body->GetPosition().y - h / 2;
+                    x *= 32;
+                    y *= 32;
+
+                    // Set solid using kinematic objects
+                    if (!isSolid && type == 1) body->SetType(b2_kinematicBody);
+                    if (isSolid && type == 1) body->SetType(b2_dynamicBody);
+                    if (type == 2) body->SetActive(isSolid);
+
+                    // Set gravity and rotation
+                    body->SetGravityScale(DoGravity * 32);
+                    if (DoRotation) body->SetFixedRotation(false);
+                    else body->SetFixedRotation(true);
+
+                    // Get contact list (collisions)
+                    b2ContactEdge* c = body->GetContactList();
+
+                    // Get collision list
+                    int iterations = 0;
+                    while (c) {
+                        auto contact = c->contact;
+                        auto fixtureB = contact->GetFixtureB();
+                        col_body[fixtureB->GetBody()] = contact->IsTouching();
+                        c = c->next;
+                        iterations += 1;
+                    }
+                }
+
+                void Destroy() {
+                    if (body == nullptr) return;
+                    world->DestroyBody(body);
+                    body = nullptr;
+                    obj->erase(id);
+                }
+                emmit* em = nullptr;
+
+            private:
+                int id;
+                double smass = 0;
+                int type = 1;
+                int ct = 0;
+                camera* cam;
+                double impY = 0;
+                double impX = 0;
+                b2World* world = nullptr;
+
+                // Define Circle and square Fixture
+                void Define_Circle(double x, double y, double rad, double dens, int type) {
+                    b2BodyDef bodydef;
+                    bodydef.type = (type == 1 ? b2_dynamicBody : type == 2 ? b2_staticBody : b2_kinematicBody);
+                    bodydef.position.Set(x, -y);
+                    b2FixtureDef fxtdef;
+                    body = world->CreateBody(&bodydef);
+
+                    b2CircleShape shape;
+                    shape.m_radius = rad;
+                    fxtdef.shape = &shape;
+                    fxtdef.density = dens;
+                    if (body == nullptr) {
+                        std::cout << "Failed to create body." << std::endl;
+                    }
+                    else {
+                        body->CreateFixture(&fxtdef);
+                    }
+                }
+                void Define_Box(double x, double y, double _W, double _H, double dens, int type) {
+                    b2BodyDef bodydef;
+                    bodydef.type = (type == 1 ? b2_dynamicBody : type == 2 ? b2_staticBody : b2_kinematicBody);
+                    bodydef.position.Set(x, -y);
+                    b2FixtureDef fxtdef;
+                    body = world->CreateBody(&bodydef);
+
+                    b2PolygonShape Dshape;
+                    Dshape.SetAsBox(_W / 2, _H / 2);
+                    fxtdef.shape = &Dshape;
+                    shape = Dshape;
+                    fxtdef.density = dens;
+                    if (body == nullptr) std::cout << "dead";
+                    body->CreateFixture(&fxtdef);
+                }
+
+                // Other Private Helper Functions ...
+
+
+                int Spawn(Physics::type t, double _x, double _y, double _W, double _H, double _mass = 40, int type = 1, int c_type = 2) {
+                    Obj object;
+                    object.collisions_type = c_type;
+                    object.def(world, obj, _x + _W / 2, _y + _H / 2, _W, _H, _mass, type);
+//                  object.w = _W;
+//                  object.h = _H;
+                    object.sprite = "NULL";
+                    object.Type = t;
+                    obj->emplace(obj->size(), object);
+
+                    return obj->size() - 1;
+                }
+
+                void _Velocity() {
+                    b2Vec2 vel = b2Vec2(xVel * 5, -yVel * 5);
+                    if (DoGravity) body->SetLinearVelocity({ vel.x, vel.y });
+                    else body->SetLinearVelocity(vel);
+                }
+
+                void ApplyAngularVelocity(float force, double angle) {
+                    float radians = angle * (M_PI / 180.0f);
+
+                    // Calculate the X and Y components of the force vector
+                    float forceX = force * cos(radians);
+                    float forceY = force * sin(radians);
+
+                    // Apply the force to the body
+                    b2Vec2 forceVector(forceX, forceY);
+                    body->SetLinearVelocity({ forceX, forceY });
+                }
+
+            };
+
+
+        struct Window {
+        public:
+
+            bool operator== (Window o) {
+                return ev.window.windowID == o.ev.window.windowID;
+            }
+            // the window itself,for sdl functions
+            SDL_Window* win = nullptr;
+            // window dimensions
+            int W = 2, H = 2;
+            // window display name
+            std::string name = "window";
+            // the window renderer, for sdl functions
+            SDL_Renderer* rend = nullptr;
+            // the window events
+
+            // arguements: name,width,height,resizable (bool)
+            Window(std::string _name, int _W, int _H, bool resizable) {
+                if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
+                    SDL_Log("Unable to initialize SDL: %s", SDL_GetError());
+                    return;
+                }
+
+                win = SDL_CreateWindow(_name.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, _W, _H, (resizable == true ? SDL_WINDOW_RESIZABLE : SDL_WINDOW_SHOWN));
+                name = _name;
+                if (!win) {
+                    SDL_Log("Failed to create window: %s", SDL_GetError());
+                    SDL_Quit();
+                    return;
+                }
+
+                b2Vec2 grav = b2Vec2(0, 9.81 * -1);
+                world = new b2World(grav);
+
+                rend = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
+
+                if (!rend) {
+                    SDL_Log("Failed to create renderer: %s", SDL_GetError());
+                    SDL_DestroyWindow(win);
+                    SDL_Quit();
+                    return;
+                }
+                W = _W;
+                H = _H;
+                cam.wW = W;
+                cam.wH = H;
+
+            }
+
+            //--------------------
+            //       KEYS        |
+            //--------------------
+
+            bool k_a_pressed = false;
+            bool k_a_held = false;
+            bool k_a_released = false;
+            bool k_b_pressed = false;
+            bool k_b_held = false;
+            bool k_b_released = false;
+            bool k_c_pressed = false;
+            bool k_c_held = false;
+            bool k_c_released = false;
+            bool k_d_pressed = false;
+            bool k_d_held = false;
+            bool k_d_released = false;
+            bool k_e_pressed = false;
+            bool k_e_held = false;
+            bool k_e_released = false;
+            bool k_f_pressed = false;
+            bool k_f_held = false;
+            bool k_f_released = false;
+            bool k_g_pressed = false;
+            bool k_g_held = false;
+            bool k_g_released = false;
+            bool k_h_pressed = false;
+            bool k_h_held = false;
+            bool k_h_released = false;
+            bool k_i_pressed = false;
+            bool k_i_held = false;
+            bool k_i_released = false;
+            bool k_j_pressed = false;
+            bool k_j_held = false;
+            bool k_j_released = false;
+            bool k_k_pressed = false;
+            bool k_k_held = false;
+            bool k_k_released = false;
+            bool k_l_pressed = false;
+            bool k_l_held = false;
+            bool k_l_released = false;
+            bool k_m_pressed = false;
+            bool k_m_held = false;
+            bool k_m_released = false;
+            bool k_n_pressed = false;
+            bool k_n_held = false;
+            bool k_n_released = false;
+            bool k_o_pressed = false;
+            bool k_o_held = false;
+            bool k_o_released = false;
+            bool k_p_pressed = false;
+            bool k_p_held = false;
+            bool k_p_released = false;
+            bool k_q_pressed = false;
+            bool k_q_held = false;
+            bool k_q_released = false;
+            bool k_r_pressed = false;
+            bool k_r_held = false;
+            bool k_r_released = false;
+            bool k_s_pressed = false;
+            bool k_s_held = false;
+            bool k_s_released = false;
+            bool k_t_pressed = false;
+            bool k_t_held = false;
+            bool k_t_released = false;
+            bool k_u_pressed = false;
+            bool k_u_held = false;
+            bool k_u_released = false;
+            bool k_v_pressed = false;
+            bool k_v_held = false;
+            bool k_v_released = false;
+            bool k_w_pressed = false;
+            bool k_w_held = false;
+            bool k_w_released = false;
+            bool k_x_pressed = false;
+            bool k_x_held = false;
+            bool k_x_released = false;
+            bool k_y_pressed = false;
+            bool k_y_held = false;
+            bool k_y_released = false;
+            bool k_z_pressed = false;
+            bool k_z_held = false;
+            bool k_z_released = false;
+            // Additional commonly used keys
+            bool k_space_pressed = false;
+            bool k_space_held = false;
+            bool k_space_released = false;
+            bool k_enter_pressed = false;
+            bool k_enter_held = false;
+            bool k_enter_released = false;
+            bool k_escape_pressed = false;
+            bool k_escape_held = false;
+            bool k_escape_released = false;
+            bool k_shift_pressed = false;
+            bool k_shift_held = false;
+            bool k_shift_released = false;
+            bool k_ctrl_pressed = false;
+            bool k_ctrl_held = false;
+            bool k_ctrl_released = false;
+            bool k_alt_pressed = false;
+            bool k_alt_held = false;
+            bool k_alt_released = false;
+            // Special characters
+            bool k_semicolon_pressed = false;
+            bool k_semicolon_held = false;
+            bool k_semicolon_released = false;
+            bool k_apostrophe_pressed = false;
+            bool k_apostrophe_held = false;
+            bool k_apostrophe_released = false;
+            bool k_period_pressed = false;
+            bool k_period_held = false;
+            bool k_period_released = false;
+            bool k_comma_pressed = false;
+            bool k_comma_held = false;
+            bool k_comma_released = false;
+            bool k_slash_pressed = false;
+            bool k_slash_held = false;
+            bool k_slash_released = false;
+            bool k_backslash_pressed = false;
+            bool k_backslash_held = false;
+            bool k_backslash_released = false;
+            bool k_asterisk_pressed = false;
+            bool k_asterisk_held = false;
+            bool k_asterisk_released = false;
+            bool k_equals_pressed = false;
+            bool k_equals_held = false;
+            bool k_equals_released = false;
+            bool k_minus_pressed = false;
+            bool k_minus_held = false;
+            bool k_minus_released = false;
+            // Number keys (0-9)
+            bool k_0_pressed = false;
+            bool k_0_held = false;
+            bool k_0_released = false;
+            bool k_1_pressed = false;
+            bool k_1_held = false;
+            bool k_1_released = false;
+            bool k_2_pressed = false;
+            bool k_2_held = false;
+            bool k_2_released = false;
+            bool k_3_pressed = false;
+            bool k_3_held = false;
+            bool k_3_released = false;
+            bool k_4_pressed = false;
+            bool k_4_held = false;
+            bool k_4_released = false;
+            bool k_5_pressed = false;
+            bool k_5_held = false;
+            bool k_5_released = false;
+            bool k_6_pressed = false;
+            bool k_6_held = false;
+            bool k_6_released = false;
+            bool k_7_pressed = false;
+            bool k_7_held = false;
+            bool k_7_released = false;
+            bool k_8_pressed = false;
+            bool k_8_held = false;
+            bool k_8_released = false;
+            bool k_9_pressed = false;
+            bool k_9_held = false;
+            bool k_9_released = false;
+            // Arrow keys
+            bool k_up_pressed = false;
+            bool k_up_held = false;
+            bool k_up_released = false;
+            bool k_down_pressed = false;
+            bool k_down_held = false;
+            bool k_down_released = false;
+            bool k_left_pressed = false;
+            bool k_left_held = false;
+            bool k_left_released = false;
+            bool k_right_pressed = false;
+            bool k_right_held = false;
+            bool k_right_released = false;
+
+            // the window mouse events
+            bool m_left_pressed = false;
+            bool m_left_held = false;
+            bool m_left_released = false;
+            bool m_right_pressed = false;
+            bool m_right_held = false;
+            bool m_right_released = false;
+            int m_x = 0;
+            int m_y = 0;
+            int m_wheel_x = 0;
+            int m_wheel_y = 0;
+            bool m_lock = false;
+            bool m_show = true;
+
+            //----------------------------
+            //           GENERAL         |
+            //----------------------------
+
+            // if the window is running
+            bool running = true;
+            // if the window is full screen
+            bool fullscreen = false;
+            // display fps on the window
+            bool display_FPS = true;
+            // fps as a variable
+            int fps = 0;
+            // delta time for animations and movement
+            double dt = 0;
+            // draw hit boxes
+            bool Draw_hitboxes = false;
+            // set max frame rate
+            int max_FPS = 0;
+            // window textures to load and destroy
+            std::vector <SDL_Texture*> textures = {};
+            // the window color
+            SDL_Color color = { 255,255,255,255 };
+            // clear the window with the window color.
+            bool clear = true;
+
+            // update the window and its properties
+            bool run() {
+                return running;
+            }
+            void Update() {
+                Reset_Events();
+                Get_Events();
+                Cap_FPS((max_FPS == 0 ? 2000 : max_FPS));
+
+                // mouse lock
+                if (m_lock) {
+                    int mx, my;
+                    SDL_GetMouseState(&mx, &my);
+                    m_x = W / 2 - mx, m_y = H / 2 - my;
+                }
+
+                // clear the screen
+                // change values
+                double z = cam.zoom / 100;
+                cam.PhysicsDisplayMode = PhysicsDisplayMode;
+                SDL_RenderSetScale(rend, z, z);
+
+                SDL_GetWindowSize(win, &W, &H);
+                if (fullscreen) {
+                    SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN);
+                    if (k_escape_pressed) fullscreen = false;
+                }
+                else {
+                    SDL_SetWindowFullscreen(win, 0);
+                }
+                SDL_ShowCursor(m_show);
+
+                if (!m_lock) SDL_GetMouseState(&m_x, &m_y);
+                fps = FPS();
+                world->Step(dt, 6, 2);
+
+                for (int i = 0; i < obj.size(); i++) {
+                    obj[i].Update();
+                    if (obj[i].sprite != "NULL" &&! obj[i].playing_animation) {
+                        if (PhysicsDisplayMode == PHYSICS_REAL_DISPLAY_MODE) Draw_Sprite(obj[i].x, obj[i].y, obj[i].w * 32, obj[i].h * 32, obj[i].Get_Angle() * (180 / M_PI) * (-1), obj[i].sprite);
+                        if (PhysicsDisplayMode == PHYSICS_DEBUG_DISPLAY_MODE) Draw_Sprite(obj[i].x / 32, obj[i].y / 32, obj[i].w, obj[i].h, obj[i].Get_Angle() * (180.0 / M_PI) * (-1), obj[i].sprite);
+                    }
+                }
+                if (Draw_hitboxes) Draw_Hitboxes();
+                std::string new_name = (!display_FPS ? name : name + "    fps: " + std::to_string(fps));
+                dt = Get_DT();
+                SDL_SetWindowTitle(win, new_name.c_str());
+                SDL_RenderPresent(rend);
+                if (clear) {
+                    SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                    SDL_RenderClear(rend);
+                }
+
+
+            }
+            void Set_Icon(std::string file) {
+                SDL_Surface* s = SDL_LoadBMP(file.c_str());
+                SDL_SetWindowIcon(win, s);
+            }
+            void Clear() {
+                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                SDL_RenderClear(rend);
+            }
+            // size multiplier
+            int size_m = 100;
+            //--------------------------
+            //         PHYSICS         |
+            //--------------------------
+
+        public:
+            bool PhysicsDisplayMode = PHYSICS_REAL_DISPLAY_MODE;
+
+
+            SDL_Texture* createTexture(SDL_Renderer* renderer, Uint8 r, Uint8 g, Uint8 b, Uint8 a)
+            {
+                // Create a 1x1 surface with the desired color
+                SDL_Surface* surface = SDL_CreateRGBSurface(0, 1, 1, 32, 0, 0, 0, 0);
+                if (!surface) {
+                    SDL_Log("SDL_CreateRGBSurface failed: %s", SDL_GetError());
+                    return nullptr;
+                }
+
+                // Fill the surface with the specified color
+                SDL_FillRect(surface, nullptr, SDL_MapRGBA(surface->format, r, g, b, a));
+
+                // Create a texture from the surface
+                SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+                if (!texture) {
+                    SDL_Log("SDL_CreateTextureFromSurface failed: %s", SDL_GetError());
+                }
+
+                // Free the surface since we no longer need it
+                SDL_FreeSurface(surface);
+
+                return texture;
+            }
+
+            b2World* world = nullptr;
+            std::unordered_map<int, Obj> obj = {};
+
+            void Set_Gravity(float32 hor, float32 vert) {
+                world->SetGravity({ hor, vert * (-1) });
+            }
+
+            int Spawn(type t, double _x, double _y, double _W, double _H, double _mass = 40, int type = 1, int c_type = 2) {
+                Obj object;
+                object.collisions_type = c_type;
+                object.def(world, &obj, _x + _W / 2, _y + _H / 2, _W, _H, _mass, type);
+                //                object.w = _W;
+                //                object.h = _H;
+                object.sprite = "NULL";
+                object.Type = t;
+                obj[obj.size()] = object;
+                return obj.size() - 1;
+            }
+            int Spawn(Obj obje) {
+
+                obj[obj.size()] = obje;
+
+                return obj.size() - 1;
+            }
+
+            int Get_Obj_From_Body(b2Body* Body) {
+                for (int i = 0; i < obj.size(); i++) {
+                    if (obj[i].body == Body) return i;
+                }
+                return -1;
+            }
+
+            //--------------------------
+            //         DRAW            |
+            //--------------------------
+            // draw pixel on the screen
+            void Draw(int x, int y, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    x -= cam.x;
+                    y -= cam.y;
+                }
+                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                SDL_RenderDrawPoint(rend, x, y);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+            void Draw(SDL_Point point, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    point.x -= cam.x;
+                    point.y -= cam.y;
+                }
+                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                SDL_RenderDrawPoint(rend, point.x, point.y);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+
+            void Load_Sprite(int x, int y, double angle, int width, int height, std::string file, SDL_Rect sorcrect = { 10,10,9,9 }, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    x -= cam.x;
+                    y -= cam.y;
+                }
+                SDL_Texture* spriteTexture = SDL_CreateTextureFromSurface(rend, SDL_LoadBMP(file.c_str()));
+                SDL_Rect srcRect = { 0, 0, width, height };
+
+                if (sorcrect.x != 10 && sorcrect.y != 10 && sorcrect.w != 9 && sorcrect.h != 9) srcRect = sorcrect;
+                SDL_Rect destRect = { x, y, width, height };
+
+                if (!spriteTexture) {
+                    SDL_Log("Unable to load sprite texture: %s", SDL_GetError());
+                }
+
+                SDL_RenderCopyEx(rend, spriteTexture, &srcRect, &destRect, angle, NULL, SDL_FLIP_NONE);
+                textures.push_back(spriteTexture);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+            void Draw_Sprite(int x, int y, int width, int height, double angle, std::string file, SDL_Rect sorcrect = { 10,10,9,9 }, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    x -= cam.x;
+                    y -= cam.y;
+                }
+                SDL_Texture* spriteTexture = SDL_CreateTextureFromSurface(rend, SDL_LoadBMP(file.c_str()));
+                SDL_Rect srcRect = { 0, 0, width, height };
+
+                if (sorcrect.x != 10 && sorcrect.y != 10 && sorcrect.w != 9 && sorcrect.h != 9) srcRect = sorcrect;
+                SDL_Rect destRect = { x, y, width, height };
+
+                if (!spriteTexture) {
+                    SDL_Log("Unable to load sprite texture: %s", SDL_GetError());
+                }
+
+                SDL_RenderCopyEx(rend, spriteTexture, &srcRect, &destRect, angle, NULL, SDL_FLIP_NONE);
+                textures.push_back(spriteTexture);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+
+            void Draw_Rect(int X, int Y, int W, int H, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    X -= cam.x;
+                    Y -= cam.y;
+                }
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_Rect squareRect = { X, Y, W, H };
+
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderDrawRect(rend, &squareRect);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+            void Draw_Rect(SDL_Point pos, int w, int h, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    pos.x -= cam.x;
+                    pos.y -= cam.y;
+                }
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_Rect squareRect = { pos.x, pos.y, w, h };
+
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderDrawRect(rend, &squareRect);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+
+            void Draw_Line(int X, int Y, int X1, int Y1, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    X -= cam.x;
+                    Y -= cam.y;
+                    X1 -= cam.x;
+                    Y1 -= cam.y;
+                }
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderDrawLine(rend, X, Y, X1, Y1);
+            }
+            void Draw_Line(SDL_Point pos, SDL_Point pos2, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    pos.x -= cam.x;
+                    pos.y -= cam.y;
+                    pos2.x -= cam.x;
+                    pos2.y -= cam.y;
+                }
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderDrawLine(rend, pos.x, pos.y, pos2.x, pos2.y);
+            }
+
+            void Fill_Rect(int X, int Y, int W, int H, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    X -= cam.x;
+                    Y -= cam.y;
+                }
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_Rect squareRect = { X, Y, W, H };
+
+                SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderFillRect(rend, &squareRect);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+            void Fill_Rect(SDL_Point pos, int W, int H, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    pos.x -= cam.x;
+                    pos.y -= cam.y;
+                }
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_Rect squareRect = { pos.x, pos.y, W, H };
+
+                SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderFillRect(rend, &squareRect);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+
+            void Draw_Circle(int x, int y, int rad, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    x -= cam.x;
+                    y -= cam.y;
+                }
+                b2Vec2 last = AngleAndDistance_To(x, y, 0, rad / 2);
+                b2Vec2 first = last;
+                for (int angle = 1; angle <= 360; angle++) {
+                    b2Vec2 point = AngleAndDistance_To(x, y, angle, rad / 2);
+                    SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                    SDL_RenderDrawLine(rend, last.x, last.y, point.x, point.y);
+                    last = point;
+                }
+            }
+            void Fill_Circle(int x, int y, int rad, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    x -= cam.x;
+                    y -= cam.y;
+                }
+                SDL_Texture* t = createTexture(rend, color.r, color.g, color.b, color.a);
+
+                b2Vec2 last = AngleAndDistance_To(x, y, 0, rad / 2);
+                b2Vec2 first = last;
+                for (int angle = 1; angle <= 360; angle++) {
+                    b2Vec2 point = AngleAndDistance_To(x, y, angle, rad / 2);
+                    SDL_Vertex vertices[3] = { { last.x, last.y }, { point.x, point.y }, { x, y } };
+
+                    SDL_Vertex* vertexArray[3] = { &vertices[0], &vertices[1], &vertices[2] };
+                    
+                    // Now you can use vertexArray in your SDL_RenderGeometry function call
+                    SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                    SDL_SetRenderDrawColor(rend, 255, 0, 0, 255);
+                    SDL_RenderGeometry(rend, NULL, *vertexArray, 3, NULL, 0);
+
+                    last = point;
+                }
+            }
+
+            void Draw_Poly_Hitbox(Obj obj, int layer = GAME_LAYER) {
+                b2Vec2 pos = obj.body->GetPosition();
+                pos.y *= (-1);
+                if (PhysicsDisplayMode == PHYSICS_REAL_DISPLAY_MODE)
+                    obj.w *= 32,
+                    obj.h *= 32;
+                if (PhysicsDisplayMode == PHYSICS_DEBUG_DISPLAY_MODE)
+                    obj.x /= 32,
+                    obj.y /= 32;
+                pos.x += (obj.w) / 2;
+                pos.y += (obj.h) / 2;
+                std::cout << pos.x << "\n";
+                b2Vec2 l = obj.shape.GetVertex(0);
+
+                // draw the shapes
+                for (int i = 1; i < obj.shape.GetVertexCount(); i++) {
+
+                    b2Vec2 n = obj.shape.GetVertex(i);
+
+                    if (layer == GAME_LAYER) {
+                        l.x -= cam.x;
+                        l.y -= cam.y;
+                        n.x -= cam.x;
+                        n.y -= cam.y;
+                    }
+
+                    // Calculate the SDL_Point coordinates without adding body's position to both x and y
+                    SDL_Point a = { static_cast<int>(l.x), static_cast<int>(l.y) };
+                    SDL_Point b = { static_cast<int>(n.x), static_cast<int>(n.y) };
+
+                    if (layer == GAME_LAYER) {
+                        a.x += static_cast<int>(pos.x);
+                        a.y += static_cast<int>(pos.y);
+                        b.x += static_cast<int>(pos.x);
+                        b.y += static_cast<int>(pos.y);
+                    }
+
+                    // Draw the line
+                    Draw_Line(a, b, WHITE);
+
+                    l = n;
+                }
+
+                // Connect the last vertex to the first vertex to close the shape
+                b2Vec2 n = obj.shape.GetVertex(obj.shape.GetVertexCount() - 1);
+                l = obj.shape.GetVertex(0);
+
+                if (layer == GAME_LAYER) {
+                    l.x -= cam.x;
+                    l.y -= cam.y;
+                    n.x -= cam.x;
+                    n.y -= cam.y;
+                }
+
+                // Calculate the SDL_Point coordinates without adding body's position to both x and y
+                SDL_Point a = { static_cast<int>(l.x), static_cast<int>(l.y) };
+                SDL_Point b = { static_cast<int>(n.x), static_cast<int>(n.y) };
+
+                if (layer == GAME_LAYER) {
+                    a.x += static_cast<int>(pos.x);
+                    a.y += static_cast<int>(pos.y);
+                    b.x += static_cast<int>(pos.x);
+                    b.y += static_cast<int>(pos.y);
+                }
+
+                // Draw the line
+                Draw_Line(a, b, WHITE);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+
+            //---------------------------
+            //           OTHER          |
+            //---------------------------
+
+            void Reset_Events() {
+                events = {};
+                // keyboard events
+                k_a_pressed = false;
+                k_a_released = false;
+                k_b_pressed = false;
+                k_b_released = false;
+                k_c_pressed = false;
+                k_c_released = false;
+                k_d_pressed = false;
+                k_d_released = false;
+                k_e_pressed = false;
+                k_e_released = false;
+                k_f_pressed = false;
+                k_f_released = false;
+                k_g_pressed = false;
+                k_g_released = false;
+                k_h_pressed = false;
+                k_h_released = false;
+                k_i_pressed = false;
+                k_i_released = false;
+                k_j_pressed = false;
+                k_j_released = false;
+                k_k_pressed = false;
+                k_k_released = false;
+                k_l_pressed = false;
+                k_l_released = false;
+                k_m_pressed = false;
+                k_m_released = false;
+                k_n_pressed = false;
+                k_n_released = false;
+                k_o_pressed = false;
+                k_o_released = false;
+                k_p_pressed = false;
+                k_p_released = false;
+                k_q_pressed = false;
+                k_q_released = false;
+                k_r_pressed = false;
+                k_r_released = false;
+                k_s_pressed = false;
+                k_s_released = false;
+                k_t_pressed = false;
+                k_t_released = false;
+                k_u_pressed = false;
+                k_u_released = false;
+                k_v_pressed = false;
+                k_v_released = false;
+                k_w_pressed = false;
+                k_w_released = false;
+                k_x_pressed = false;
+                k_x_released = false;
+                k_y_pressed = false;
+                k_y_released = false;
+                k_z_pressed = false;
+                k_z_released = false;
+                k_space_pressed = false;
+                k_space_released = false;
+                k_enter_pressed = false;
+                k_enter_released = false;
+                k_escape_pressed = false;
+                k_escape_released = false;
+                k_shift_pressed = false;
+                k_shift_released = false;
+                k_ctrl_pressed = false;
+                k_ctrl_released = false;
+                k_alt_pressed = false;
+                k_alt_released = false;
+                k_semicolon_pressed = false;
+                k_semicolon_released = false;
+                k_apostrophe_pressed = false;
+                k_apostrophe_released = false;
+                k_period_pressed = false;
+                k_period_released = false;
+                k_comma_pressed = false;
+                k_comma_released = false;
+                k_slash_pressed = false;
+                k_slash_released = false;
+                k_backslash_pressed = false;
+                k_backslash_released = false;
+                k_asterisk_pressed = false;
+                k_asterisk_released = false;
+                k_equals_pressed = false;
+                k_equals_released = false;
+                k_minus_pressed = false;
+                k_minus_released = false;
+                k_0_pressed = false;
+                k_0_released = false;
+                k_1_pressed = false;
+                k_1_released = false;
+                k_2_pressed = false;
+                k_2_released = false;
+                k_3_pressed = false;
+                k_3_released = false;
+                k_4_pressed = false;
+                k_4_released = false;
+                k_5_pressed = false;
+                k_5_released = false;
+                k_6_pressed = false;
+                k_6_released = false;
+                k_7_pressed = false;
+                k_7_released = false;
+                k_8_pressed = false;
+                k_8_released = false;
+                k_9_pressed = false;
+                k_9_released = false;
+                k_up_pressed = false;
+                k_up_released = false;
+                k_down_pressed = false;
+                k_down_released = false;
+                k_left_pressed = false;
+                k_left_released = false;
+                k_right_pressed = false;
+                k_right_released = false;
+
+                m_left_pressed = false;
+                m_left_released = false;
+                m_right_pressed = false;
+                m_right_released = false;
+            }
+
+            void Get_Events() {
+                Reset_Events();
+                while (SDL_PollEvent(&ev)) {
+                    if (ev.type == SDL_QUIT) running = false;
+                    if (ev.type == SDL_MOUSEBUTTONDOWN) {
+                        if (ev.button.button == SDL_BUTTON_LEFT) {
+                            m_left_pressed = true;
+                            m_left_held = true;
+                        }
+                        if (ev.button.button == SDL_BUTTON_RIGHT) {
+                            m_right_pressed = true;
+                            m_right_held = true;
+                        }
+                    }
+                    if (ev.type == SDL_MOUSEBUTTONUP) {
+                        if (ev.button.button == SDL_BUTTON_LEFT) {
+                            m_left_released = true;
+                            m_left_held = false;
+                        }
+                        if (ev.button.button == SDL_BUTTON_RIGHT) {
+                            m_right_released = true;
+                            m_right_held = false;
+                        }
+                    }
+                    if (ev.type == SDL_MOUSEWHEEL) m_wheel_x = ev.wheel.x, m_wheel_y = ev.wheel.y;
+                    else if (ev.type == SDL_KEYDOWN) {
+                        switch (ev.key.keysym.sym) {
+                        case SDLK_a:
+
+                            k_a_pressed = true;
+                            k_a_held = true;
+
+                            break;
+
+                        case SDLK_b:
+
+                            k_b_pressed = true;
+                            k_b_held = true;
+
+                            break;
+
+                        case SDLK_c:
+
+                            k_c_pressed = true;
+                            k_c_held = true;
+
+                            break;
+
+                        case SDLK_d:
+
+                            k_d_pressed = true;
+                            k_d_held = true;
+
+                            break;
+
+                        case SDLK_e:
+
+                            k_e_pressed = true;
+                            k_e_held = true;
+
+                            break;
+
+                        case SDLK_f:
+
+                            k_f_pressed = true;
+                            k_f_held = true;
+
+                            break;
+
+                        case SDLK_g:
+
+                            k_g_pressed = true;
+                            k_g_held = true;
+
+                            break;
+
+                        case SDLK_h:
+
+                            k_h_pressed = true;
+                            k_h_held = true;
+
+                            break;
+
+                        case SDLK_i:
+
+                            k_i_pressed = true;
+                            k_i_held = true;
+
+                            break;
+
+                        case SDLK_j:
+
+                            k_j_pressed = true;
+                            k_j_held = true;
+
+                            break;
+
+                        case SDLK_k:
+
+                            k_k_pressed = true;
+                            k_k_held = true;
+
+                            break;
+
+                        case SDLK_l:
+
+                            k_l_pressed = true;
+                            k_l_held = true;
+
+                            break;
+
+                        case SDLK_m:
+
+                            k_m_pressed = true;
+                            k_m_held = true;
+
+                            break;
+
+                        case SDLK_n:
+
+                            k_n_pressed = true;
+                            k_n_held = true;
+
+                            break;
+
+                        case SDLK_o:
+
+                            k_o_pressed = true;
+                            k_o_held = true;
+
+                            break;
+
+                        case SDLK_p:
+
+                            k_p_pressed = true;
+                            k_p_held = true;
+
+                            break;
+
+                        case SDLK_q:
+
+                            k_q_pressed = true;
+                            k_q_held = true;
+
+                            break;
+
+                        case SDLK_r:
+
+                            k_r_pressed = true;
+                            k_r_held = true;
+
+                            break;
+
+                        case SDLK_s:
+
+                            k_s_pressed = true;
+                            k_s_held = true;
+
+                            break;
+
+                        case SDLK_t:
+
+                            k_t_pressed = true;
+                            k_t_held = true;
+
+                            break;
+
+                        case SDLK_u:
+
+                            k_u_pressed = true;
+                            k_u_held = true;
+
+                            break;
+
+                        case SDLK_v:
+
+                            k_v_pressed = true;
+                            k_v_held = true;
+
+                            break;
+
+                        case SDLK_w:
+
+                            k_w_pressed = true;
+                            k_w_held = true;
+
+                            break;
+
+                        case SDLK_x:
+
+                            k_x_pressed = true;
+                            k_x_held = true;
+
+                            break;
+
+                        case SDLK_y:
+
+                            k_y_pressed = true;
+                            k_y_held = true;
+
+                            break;
+
+                        case SDLK_z:
+
+                            k_z_pressed = true;
+                            k_z_held = true;
+
+                            break;
+
+                        case SDLK_SPACE:
+
+                            k_space_pressed = true;
+                            k_space_held = true;
+
+                            break;
+
+                        case SDLK_RETURN:
+
+                            k_enter_pressed = true;
+                            k_enter_held = true;
+
+                            break;
+
+                        case SDLK_ESCAPE:
+
+                            k_escape_pressed = true;
+                            k_escape_held = true;
+
+                            break;
+
+                        case SDLK_LSHIFT:
+                        case SDLK_RSHIFT:
+
+                            k_shift_pressed = true;
+                            k_shift_held = true;
+
+                            break;
+
+                        case SDLK_LCTRL:
+                        case SDLK_RCTRL:
+
+                            k_ctrl_pressed = true;
+                            k_ctrl_held = true;
+
+                            break;
+
+                        case SDLK_LALT:
+                        case SDLK_RALT:
+
+                            k_alt_pressed = true;
+                            k_alt_held = true;
+
+                            break;
+
+                        case SDLK_SEMICOLON:
+
+                            k_semicolon_pressed = true;
+                            k_semicolon_held = true;
+
+                            break;
+
+                        case SDLK_PERIOD:
+
+                            k_period_pressed = true;
+                            k_period_held = true;
+
+                            break;
+
+                        case SDLK_COMMA:
+
+                            k_comma_pressed = true;
+                            k_comma_held = true;
+
+                            break;
+
+                        case SDLK_SLASH:
+
+                            k_slash_pressed = true;
+                            k_slash_held = true;
+
+                            break;
+
+                        case SDLK_BACKSLASH:
+
+                            k_backslash_pressed = true;
+                            k_backslash_held = true;
+
+                            break;
+
+                        case SDLK_ASTERISK:
+
+                            k_asterisk_pressed = true;
+                            k_asterisk_held = true;
+
+                            break;
+
+                        case SDLK_EQUALS:
+
+                            k_equals_pressed = true;
+                            k_equals_held = true;
+
+                            break;
+
+                        case SDLK_MINUS:
+
+                            k_minus_pressed = true;
+                            k_minus_held = true;
+
+                            break;
+
+                        case SDLK_UP:
+
+                            k_up_pressed = true;
+                            k_up_held = true;
+
+                            break;
+
+                        case SDLK_DOWN:
+
+                            k_down_pressed = true;
+                            k_down_held = true;
+
+                            break;
+
+                        case SDLK_LEFT:
+
+                            k_left_pressed = true;
+                            k_left_held = true;
+
+                            break;
+
+                        case SDLK_RIGHT:
+
+                            k_right_pressed = true;
+                            k_right_held = true;
+                            break;
+                        default:
+                            events.push_back(ev);
+                        }
+                    }
+                    else if (ev.type == SDL_KEYUP) {
+                        switch (ev.key.keysym.sym) {
+                        case SDLK_a:
+                            k_a_released = true;
+                            k_a_held = false;
+                            break;
+
+                        case SDLK_b:
+                            k_b_released = true;
+                            k_b_held = false;
+                            break;
+
+                        case SDLK_c:
+                            k_c_released = true;
+                            k_c_held = false;
+                            break;
+
+                        case SDLK_d:
+                            k_d_released = true;
+                            k_d_held = false;
+                            break;
+
+                        case SDLK_e:
+                            k_e_released = true;
+                            k_e_held = false;
+                            break;
+
+                        case SDLK_f:
+                            k_f_released = true;
+                            k_f_held = false;
+                            break;
+
+                        case SDLK_g:
+                            k_g_released = true;
+                            k_g_held = false;
+                            break;
+
+                        case SDLK_h:
+                            k_h_released = true;
+                            k_h_held = false;
+                            break;
+
+                        case SDLK_i:
+                            k_i_released = true;
+                            k_i_held = false;
+                            break;
+
+                        case SDLK_j:
+                            k_j_released = true;
+                            k_j_held = false;
+                            break;
+
+                        case SDLK_k:
+                            k_k_released = true;
+                            k_k_held = false;
+                            break;
+
+                        case SDLK_l:
+                            k_l_released = true;
+                            k_l_held = false;
+                            break;
+
+                        case SDLK_m:
+                            k_m_released = true;
+                            k_m_held = false;
+                            break;
+
+                        case SDLK_n:
+                            k_n_released = true;
+                            k_n_held = false;
+                            break;
+
+                        case SDLK_o:
+                            k_o_released = true;
+                            k_o_held = false;
+                            break;
+
+                        case SDLK_p:
+                            k_p_released = true;
+                            k_p_held = false;
+                            break;
+
+                        case SDLK_q:
+                            k_q_released = true;
+                            k_q_held = false;
+                            break;
+
+                        case SDLK_r:
+                            k_r_released = true;
+                            k_r_held = false;
+                            break;
+
+                        case SDLK_s:
+                            k_s_released = true;
+                            k_s_held = false;
+                            break;
+
+                        case SDLK_t:
+                            k_t_released = true;
+                            k_t_held = false;
+                            break;
+
+                        case SDLK_u:
+                            k_u_released = true;
+                            k_u_held = false;
+                            break;
+
+                        case SDLK_v:
+                            k_v_released = true;
+                            k_v_held = false;
+                            break;
+
+                        case SDLK_w:
+                            k_w_released = true;
+                            k_w_held = false;
+                            break;
+
+                        case SDLK_x:
+                            k_x_released = true;
+                            k_x_held = false;
+                            break;
+
+                        case SDLK_y:
+                            k_y_released = true;
+                            k_y_held = false;
+                            break;
+
+                        case SDLK_z:
+                            k_z_released = true;
+                            k_z_held = false;
+                            break;
+
+                        case SDLK_SPACE:
+                            k_space_released = true;
+                            k_space_held = false;
+                            break;
+
+                        case SDLK_RETURN:
+                            k_enter_released = true;
+                            k_enter_held = false;
+                            break;
+
+                        case SDLK_ESCAPE:
+                            k_escape_released = true;
+                            k_escape_held = false;
+                            break;
+
+                        case SDLK_LSHIFT:
+                        case SDLK_RSHIFT:
+                            k_shift_released = true;
+                            k_shift_held = false;
+                            break;
+
+                        case SDLK_LCTRL:
+                        case SDLK_RCTRL:
+                            k_ctrl_released = true;
+                            k_ctrl_held = false;
+                            break;
+
+                        case SDLK_LALT:
+                        case SDLK_RALT:
+                            k_alt_released = true;
+                            k_alt_held = false;
+                            break;
+
+                        case SDLK_SEMICOLON:
+                            k_semicolon_released = true;
+                            k_semicolon_held = false;
+                            break;
+
+                        case SDLK_PERIOD:
+                            k_period_released = true;
+                            k_period_held = false;
+                            break;
+
+                        case SDLK_COMMA:
+                            k_comma_released = true;
+                            k_comma_held = false;
+                            break;
+
+                        case SDLK_SLASH:
+                            k_slash_released = true;
+                            k_slash_held = false;
+                            break;
+
+                        case SDLK_BACKSLASH:
+                            k_backslash_released = true;
+                            k_backslash_held = false;
+                            break;
+
+                        case SDLK_ASTERISK:
+                            k_asterisk_released = true;
+                            k_asterisk_held = false;
+                            break;
+
+                        case SDLK_EQUALS:
+                            k_equals_released = true;
+                            k_equals_held = false;
+                            break;
+
+                        case SDLK_MINUS:
+                            k_minus_released = true;
+                            k_minus_held = false;
+                            break;
+
+                        case SDLK_UP:
+                            k_up_released = true;
+                            k_up_held = false;
+                            break;
+
+                        case SDLK_DOWN:
+                            k_down_released = true;
+                            k_down_held = false;
+                            break;
+
+                        case SDLK_LEFT:
+                            k_left_released = true;
+                            k_left_held = false;
+                            break;
+
+                        case SDLK_RIGHT:
+                            k_right_released = true;
+                            k_right_held = false;
+                            break;
+                        default:
+                            events.push_back(ev);
+                        }
+
+                    }
+                    else events.push_back(ev);
+                }
+            }
+
+            bool Event_Loop() {
+                static int iteration = 0;
+                if (iteration == events.size()) return false;
+                event = events[iteration];
+                iteration++;
+
+                event.window.windowID = SDL_GetWindowID(win);
+                return true;
+            }
+            SDL_Event event;
+            camera cam = { 0,0,W,H };
+        private:
+            SDL_Event ev;
+            std::vector<SDL_Event> events;
+            void Draw_Hitboxes() {
+                // Iterate through all objects in the world
+                for (int i = 0; i < obj.size(); i++) {
+
+                    b2Body* body = obj[i].body;
+                    if (body == nullptr) continue;
+                    // Iterate through all fixtures of the body
+                    for (b2Fixture* fixture = body->GetFixtureList(); fixture; fixture = fixture->GetNext()) {
+                        // Get the shape of the fixture
+                        b2Shape* shape = fixture->GetShape();
+
+                        // Check the shape type and draw accordingly
+                        switch (shape->GetType()) {
+                        case b2Shape::e_polygon:
+                            // Handle polygon shapes
+                        {
+                            b2PolygonShape* polygonShape = dynamic_cast<b2PolygonShape*>(shape);
+                            if (polygonShape) {
+                                b2Vec2 position = body->GetPosition();
+                                float x = position.x;
+                                float y = position.y;
+                                float w = polygonShape->m_vertices[2].x * 2;
+                                float h = polygonShape->m_vertices[2].y * 2;
+                                SDL_Color color = { 255, 255, 255, 255 };
+                                Draw_Rect(x, y * -1, w, h, color);
+                            }
+                        }
+                        break;
+                        case b2Shape::e_circle:
+                            // Handle circle shapes
+                        {
+                            b2CircleShape* circleShape = dynamic_cast<b2CircleShape*>(shape);
+                            if (circleShape) {
+                                b2Vec2 position = body->GetPosition();
+                                float x = position.x;
+                                float y = position.y;
+                                float rad = circleShape->m_radius;
+                                SDL_Color color = { 255, 255, 255, 255 };
+                                Draw_Circle(x + rad / 2, y * -1 + rad / 2, rad, color);
+                            }
+                        }
+                        break;
+                        case b2Shape::e_edge:
+                            // Handle edge shapes
+                        {
+                            b2EdgeShape* edgeShape = dynamic_cast<b2EdgeShape*>(shape);
+                            if (edgeShape) {
+                                b2Vec2 v1 = body->GetWorldPoint(edgeShape->m_vertex1);
+                                b2Vec2 v2 = body->GetWorldPoint(edgeShape->m_vertex2);
+                                SDL_Color color = { 255, 255, 255, 255 };
+                                Draw_Line(v1.x, v1.y * -1, v2.x, v2.y, color);
+                            }
+                        }
+                        break;
+                        case b2Shape::e_chain:
+                            // Handle chain shapes
+                        {
+                            b2ChainShape* chainShape = dynamic_cast<b2ChainShape*>(shape);
+                            if (chainShape) {
+                                int32 count = chainShape->m_count;
+                                for (int32 i = 0; i < count - 1; ++i) {
+                                    b2Vec2 v1 = body->GetWorldPoint(chainShape->m_vertices[i]);
+                                    b2Vec2 v2 = body->GetWorldPoint(chainShape->m_vertices[i + 1]);
+                                    SDL_Color color = { 255, 255, 255, 255 };
+                                    Draw_Line(v1.x, v1.y * -1, v2.x, v2.y, color);
+                                }
+                            }
+                        }
+                        break;
+                        // Handle other shape types as needed
+                        }
+                    }
+                }
+            }
+
+            int last_m_x = 0;
+            int last_m_y = 0;
+            double lastfps = 0;
+
+
+            void Cap_FPS(int cap) {
+                // Calculate the maximum frame time allowed for the desired FPS
+                double maxFT = 1.0 / cap;
+
+                // Get the time at the end of the frame
+                double frameEndTime = SDL_GetTicks() / 1000.0;
+
+                // Calculate the time it took to process the current frame
+                double frameTime = frameEndTime - lastFrameEndTime;
+
+                // Calculate the delay needed to cap the frame rate (if necessary)
+                double delayTime = maxFT - frameTime;
+
+                // Check if delay is needed and perform it
+                if (delayTime > 0) {
+                    SDL_Delay(static_cast<Uint32>(delayTime * 1000.0)); // Convert to milliseconds
+                }
+
+                // Update the time for the end of the next frame
+                lastFrameEndTime = SDL_GetTicks() / 1000.0;
+            }
+        public:
+
+            // Place this declaration outside the function
+            double lastFrameEndTime = 0.0;
+
+            double FPS() {
+                static int frameCount = 0;
+                static double lastTime = 0.0;
+                double currentTime = SDL_GetTicks() / 1000.0;  // Get current time in seconds
+                frameCount++;
+
+                if (currentTime - lastTime >= 1.0) {
+                    double fps = static_cast<double>(frameCount) / (currentTime - lastTime);
+                    lastTime = currentTime;
+                    frameCount = 0;
+                    lastfps = fps; // Update lastFPS when the calculation is done
+                }
+
+                return lastfps; // Return lastFPS, which may be the last calculated FPS or -1.0
+            }
+
+            double Get_DT() {
+                static double lastTime = SDL_GetTicks() / 1000.0;
+                double currentTime = SDL_GetTicks() / 1000.0;
+                double deltaTime = currentTime - lastTime;
+                lastTime = currentTime;
+                return deltaTime;
+            }
+
+        };
+    }
+    namespace NoPhy {
+
+        struct Window {
+        public:
+            // the window itself,for sdl functions
+            SDL_Window* win = nullptr;
+            // window dimensions
+            int W = 2, H = 2;
+            // window display name
+            std::string name = "window";
+            // the window renderer, for sdl functions
+            SDL_Renderer* rend = nullptr;
+            // the window events
+
+            // arguements: name,width,height,resizable (bool)
+            Window(std::string _name, int _W, int _H, bool resizable) {
+                if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
+                    SDL_Log("Unable to initialize SDL: %s", SDL_GetError());
+                    return;
+                }
+                //TTF_Init();
+                win = SDL_CreateWindow(_name.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, _W, _H, (resizable == true ? SDL_WINDOW_RESIZABLE : SDL_WINDOW_SHOWN));
+                name = _name;
+                if (!win) {
+                    SDL_Log("Failed to create window: %s", SDL_GetError());
+                    SDL_Quit();
+                    return;
+                }
+                rend = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
+
+                if (false) {//Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
+                    // Handle initialization error
+                    return;
+                }
+
+                if (!rend) {
+                    SDL_Log("Failed to create renderer: %s", SDL_GetError());
+                    SDL_DestroyWindow(win);
+                    SDL_Quit();
+                    return;
+                }
+                W = _W;
+                H = _H;
+
+            }
+
+            //--------------------
+            //       KEYS        |
+            //--------------------
+
+            bool k_a_pressed = false;
+            bool k_a_held = false;
+            bool k_a_released = false;
+            bool k_b_pressed = false;
+            bool k_b_held = false;
+            bool k_b_released = false;
+            bool k_c_pressed = false;
+            bool k_c_held = false;
+            bool k_c_released = false;
+            bool k_d_pressed = false;
+            bool k_d_held = false;
+            bool k_d_released = false;
+            bool k_e_pressed = false;
+            bool k_e_held = false;
+            bool k_e_released = false;
+            bool k_f_pressed = false;
+            bool k_f_held = false;
+            bool k_f_released = false;
+            bool k_g_pressed = false;
+            bool k_g_held = false;
+            bool k_g_released = false;
+            bool k_h_pressed = false;
+            bool k_h_held = false;
+            bool k_h_released = false;
+            bool k_i_pressed = false;
+            bool k_i_held = false;
+            bool k_i_released = false;
+            bool k_j_pressed = false;
+            bool k_j_held = false;
+            bool k_j_released = false;
+            bool k_k_pressed = false;
+            bool k_k_held = false;
+            bool k_k_released = false;
+            bool k_l_pressed = false;
+            bool k_l_held = false;
+            bool k_l_released = false;
+            bool k_m_pressed = false;
+            bool k_m_held = false;
+            bool k_m_released = false;
+            bool k_n_pressed = false;
+            bool k_n_held = false;
+            bool k_n_released = false;
+            bool k_o_pressed = false;
+            bool k_o_held = false;
+            bool k_o_released = false;
+            bool k_p_pressed = false;
+            bool k_p_held = false;
+            bool k_p_released = false;
+            bool k_q_pressed = false;
+            bool k_q_held = false;
+            bool k_q_released = false;
+            bool k_r_pressed = false;
+            bool k_r_held = false;
+            bool k_r_released = false;
+            bool k_s_pressed = false;
+            bool k_s_held = false;
+            bool k_s_released = false;
+            bool k_t_pressed = false;
+            bool k_t_held = false;
+            bool k_t_released = false;
+            bool k_u_pressed = false;
+            bool k_u_held = false;
+            bool k_u_released = false;
+            bool k_v_pressed = false;
+            bool k_v_held = false;
+            bool k_v_released = false;
+            bool k_w_pressed = false;
+            bool k_w_held = false;
+            bool k_w_released = false;
+            bool k_x_pressed = false;
+            bool k_x_held = false;
+            bool k_x_released = false;
+            bool k_y_pressed = false;
+            bool k_y_held = false;
+            bool k_y_released = false;
+            bool k_z_pressed = false;
+            bool k_z_held = false;
+            bool k_z_released = false;
+            // Additional commonly used keys
+            bool k_space_pressed = false;
+            bool k_space_held = false;
+            bool k_space_released = false;
+            bool k_enter_pressed = false;
+            bool k_enter_held = false;
+            bool k_enter_released = false;
+            bool k_escape_pressed = false;
+            bool k_escape_held = false;
+            bool k_escape_released = false;
+            bool k_shift_pressed = false;
+            bool k_shift_held = false;
+            bool k_shift_released = false;
+            bool k_ctrl_pressed = false;
+            bool k_ctrl_held = false;
+            bool k_ctrl_released = false;
+            bool k_alt_pressed = false;
+            bool k_alt_held = false;
+            bool k_alt_released = false;
+            // Special characters
+            bool k_semicolon_pressed = false;
+            bool k_semicolon_held = false;
+            bool k_semicolon_released = false;
+            bool k_apostrophe_pressed = false;
+            bool k_apostrophe_held = false;
+            bool k_apostrophe_released = false;
+            bool k_period_pressed = false;
+            bool k_period_held = false;
+            bool k_period_released = false;
+            bool k_comma_pressed = false;
+            bool k_comma_held = false;
+            bool k_comma_released = false;
+            bool k_slash_pressed = false;
+            bool k_slash_held = false;
+            bool k_slash_released = false;
+            bool k_backslash_pressed = false;
+            bool k_backslash_held = false;
+            bool k_backslash_released = false;
+            bool k_asterisk_pressed = false;
+            bool k_asterisk_held = false;
+            bool k_asterisk_released = false;
+            bool k_equals_pressed = false;
+            bool k_equals_held = false;
+            bool k_equals_released = false;
+            bool k_minus_pressed = false;
+            bool k_minus_held = false;
+            bool k_minus_released = false;
+            // Number keys (0-9)
+            bool k_0_pressed = false;
+            bool k_0_held = false;
+            bool k_0_released = false;
+            bool k_1_pressed = false;
+            bool k_1_held = false;
+            bool k_1_released = false;
+            bool k_2_pressed = false;
+            bool k_2_held = false;
+            bool k_2_released = false;
+            bool k_3_pressed = false;
+            bool k_3_held = false;
+            bool k_3_released = false;
+            bool k_4_pressed = false;
+            bool k_4_held = false;
+            bool k_4_released = false;
+            bool k_5_pressed = false;
+            bool k_5_held = false;
+            bool k_5_released = false;
+            bool k_6_pressed = false;
+            bool k_6_held = false;
+            bool k_6_released = false;
+            bool k_7_pressed = false;
+            bool k_7_held = false;
+            bool k_7_released = false;
+            bool k_8_pressed = false;
+            bool k_8_held = false;
+            bool k_8_released = false;
+            bool k_9_pressed = false;
+            bool k_9_held = false;
+            bool k_9_released = false;
+            // Arrow keys
+            bool k_up_pressed = false;
+            bool k_up_held = false;
+            bool k_up_released = false;
+            bool k_down_pressed = false;
+            bool k_down_held = false;
+            bool k_down_released = false;
+            bool k_left_pressed = false;
+            bool k_left_held = false;
+            bool k_left_released = false;
+            bool k_right_pressed = false;
+            bool k_right_held = false;
+            bool k_right_released = false;
+
+            // the window mouse events
+            bool m_left_pressed = false;
+            bool m_left_held = false;
+            bool m_left_released = false;
+            bool m_right_pressed = false;
+            bool m_right_held = false;
+            bool m_right_released = false;
+            int m_x = 0;
+            int m_y = 0;
+            int m_wheel_x = 0;
+            int m_wheel_y = 0;
+            bool m_lock = false;
+            bool m_show = true;
+
+            //----------------------------
+            //           GENERAL         |
+            //----------------------------
+
+            // if the window is running
+            bool running = true;
+            // if the window is full screen
+            bool fullscreen = false;
+            // display fps on the window
+            bool display_FPS = true;
+            // fps as a variable
+            int fps = 0;
+            // delta time for animations and movement
+            double DT = 0;
+            // draw hit boxes
+            bool Draw_hitboxes = false;
+            // set max frame rate
+            int max_FPS = 0;
+            // window textures to load and destroy
+            std::vector <SDL_Texture*> textures = {};
+            // the window color
+            SDL_Color color = { 255,255,255,255 };
+            // clear the window with the window color.
+            bool clear = true;
+
+            // update the window and its properties
+            void Update() {
+                Reset_Events();
+                Get_Events();
+                Cap_FPS((max_FPS == 0 ? 2000 : max_FPS));
+               
+                // draw the screen
+                SDL_RenderPresent(rend);
+                
+                // clear the screen
+                if (clear) {
+                    SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                    SDL_RenderClear(rend);
+                }
+                // change values
+                SDL_GetWindowSize(win, &W, &H);
+                if (fullscreen) {
+                    SDL_SetWindowFullscreen(win, fullscreen ? SDL_WINDOW_FULLSCREEN : 0);
+                    if (k_escape_pressed) fullscreen = false;
+                }
+                else {
+                    SDL_SetWindowFullscreen(win, fullscreen ? SDL_WINDOW_FULLSCREEN : 0);
+                }
+                SDL_ShowCursor(m_show);
+                SDL_GetMouseState(&m_x, &m_y);
+                fps = FPS();
+
+                std::string new_name = (!display_FPS ? name : name + "    " + "fps: " + std::to_string(fps));
+                DT = Get_DT();
+                SDL_SetWindowTitle(win, new_name.c_str());
+
+
+                SDL_GetMouseState(&last_m_x, &last_m_y);
+            }
+            void Set_Icon(std::string file) {
+                SDL_Surface* s = SDL_LoadBMP(file.c_str());
+                SDL_SetWindowIcon(win, s);
+            }
+            void Clear() {
+                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                SDL_RenderClear(rend);
+            }
+            // size multiplier
+            int size_m = 100;
+            //--------------------------
+            //         DRAW            |
+            //--------------------------
+            // draw pixel on the screen
+            void Draw(int x, int y, SDL_Color color) {
+                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                SDL_RenderDrawPoint(rend, x, y);
+            }
+            void Draw(SDL_Point point, SDL_Color color) {
+                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                SDL_RenderDrawPoint(rend, point.x, point.y);
+            }
+            // draw a sprite on the screen. WARNING: DO NOT USE THIS TO DRAW MANY SPRITES. USE "Load_Sprite()" FOR PERFORMANCE
+            void Load_Sprite(int x, int y, double angle, int width, int height, std::string file, SDL_Rect sorcrect = { 10,10,9,9 }) {
+                SDL_Texture* spriteTexture = SDL_CreateTextureFromSurface(rend, SDL_LoadBMP(file.c_str()));
+                SDL_Rect srcRect = { 0, 0, width, height };
+                if (sorcrect.x != 10 && sorcrect.y != 10 && sorcrect.w != 9 && sorcrect.h != 9) srcRect = sorcrect;
+                SDL_Rect destRect = { x, y, width, height };
+                if (!spriteTexture) {
+                    SDL_Log("Unable to load sprite texture: %s", SDL_GetError());
+                }
+                SDL_RenderCopyEx(rend, spriteTexture, &srcRect, &destRect, angle, NULL, SDL_FLIP_NONE);
+            }
+            // draw a sprite on the screen MUST BE A BMP IMAGE
+            void Draw_Sprite(int x, int y, int width, int height, double angle, std::string file, SDL_Rect sorcrect = { 10,10,9,9 }) {
+                SDL_Texture* spriteTexture = SDL_CreateTextureFromSurface(rend, SDL_LoadBMP(file.c_str()));
+                SDL_Rect srcRect = { 0, 0, width, height };
+
+                if (sorcrect.x != 10 && sorcrect.y != 10 && sorcrect.w != 9 && sorcrect.h != 9) srcRect = sorcrect;
+                SDL_Rect destRect = { x, y, width, height };
+                if (!spriteTexture) {
+                    SDL_Log("Unable to load sprite texture: %s", SDL_GetError());
+                }
+                SDL_RenderCopyEx(rend, spriteTexture, &srcRect, &destRect, angle, NULL, SDL_FLIP_NONE);
+                textures.push_back(spriteTexture);
+            }
+            // draw a rectangle in the given position and dimensions
+            void Draw_Rect(int X, int Y, int W, int H, SDL_Color color) {
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_Rect squareRect = { X, Y,W,H };
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderDrawRect(rend, &squareRect);
+            }
+            void Draw_Rect(SDL_Point pos, int w, int h, SDL_Color color) {
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_Rect squareRect = { pos.x, pos.y,W,H };
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderDrawRect(rend, &squareRect);
+            }
+            // draw a line.
+            void Draw_Line(int X, int Y, int X1, int Y1, SDL_Color color) {
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderDrawLine(rend, X, Y, X1, Y1);
+            }
+            void Draw_Line(SDL_Point pos, SDL_Point pos2, SDL_Color color) {
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderDrawLine(rend, pos.x, pos.y, pos2.x, pos2.y);
+            }
+            // draw a filled rectangle
+            void Fill_Rect(int X, int Y, int W, int H, SDL_Color color) {
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_Rect squareRect = { X, Y,W,H };
+                SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderFillRect(rend, &squareRect);
+            }
+            void Fill_Rect(SDL_Point pos, int W, int H, SDL_Color color) {
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_Rect squareRect = { pos.x, pos.y,W,H };
+                SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderFillRect(rend, &squareRect);
+            }
+            // draw a circle (BETA)
+            void Draw_Circle(int centerX, int centerY, int radius, SDL_Color color) {
+                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                for (int x = -radius; x <= radius; ++x) {
+                    int y = static_cast<int>(sqrt(radius * radius - x * x) + 0.5);
+                    SDL_RenderDrawPoint(rend, centerX + x, centerY + y);
+                    SDL_RenderDrawPoint(rend, centerX + x, centerY - y);
+                }
+            }
+            void Draw_Circle(SDL_Point pos, int radius, SDL_Color color) {
+                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                for (int x = -radius; x <= radius; ++x) {
+                    int y = static_cast<int>(sqrt(radius * radius - x * x) + 0.5);
+                    SDL_RenderDrawPoint(rend, pos.x + x, pos.y + y);
+                }
+            }
+
+            //---------------------------
+            //           OTHER          |
+            //---------------------------
+
+            void Reset_Events() {
+                events = {};
+                // keyboard events
+                k_a_pressed = false;
+                k_a_released = false;
+                k_b_pressed = false;
+                k_b_released = false;
+                k_c_pressed = false;
+                k_c_released = false;
+                k_d_pressed = false;
+                k_d_released = false;
+                k_e_pressed = false;
+                k_e_released = false;
+                k_f_pressed = false;
+                k_f_released = false;
+                k_g_pressed = false;
+                k_g_released = false;
+                k_h_pressed = false;
+                k_h_released = false;
+                k_i_pressed = false;
+                k_i_released = false;
+                k_j_pressed = false;
+                k_j_released = false;
+                k_k_pressed = false;
+                k_k_released = false;
+                k_l_pressed = false;
+                k_l_released = false;
+                k_m_pressed = false;
+                k_m_released = false;
+                k_n_pressed = false;
+                k_n_released = false;
+                k_o_pressed = false;
+                k_o_released = false;
+                k_p_pressed = false;
+                k_p_released = false;
+                k_q_pressed = false;
+                k_q_released = false;
+                k_r_pressed = false;
+                k_r_released = false;
+                k_s_pressed = false;
+                k_s_released = false;
+                k_t_pressed = false;
+                k_t_released = false;
+                k_u_pressed = false;
+                k_u_released = false;
+                k_v_pressed = false;
+                k_v_released = false;
+                k_w_pressed = false;
+                k_w_released = false;
+                k_x_pressed = false;
+                k_x_released = false;
+                k_y_pressed = false;
+                k_y_released = false;
+                k_z_pressed = false;
+                k_z_released = false;
+                k_space_pressed = false;
+                k_space_released = false;
+                k_enter_pressed = false;
+                k_enter_released = false;
+                k_escape_pressed = false;
+                k_escape_released = false;
+                k_shift_pressed = false;
+                k_shift_released = false;
+                k_ctrl_pressed = false;
+                k_ctrl_released = false;
+                k_alt_pressed = false;
+                k_alt_released = false;
+                k_semicolon_pressed = false;
+                k_semicolon_released = false;
+                k_apostrophe_pressed = false;
+                k_apostrophe_released = false;
+                k_period_pressed = false;
+                k_period_released = false;
+                k_comma_pressed = false;
+                k_comma_released = false;
+                k_slash_pressed = false;
+                k_slash_released = false;
+                k_backslash_pressed = false;
+                k_backslash_released = false;
+                k_asterisk_pressed = false;
+                k_asterisk_released = false;
+                k_equals_pressed = false;
+                k_equals_released = false;
+                k_minus_pressed = false;
+                k_minus_released = false;
+                k_0_pressed = false;
+                k_0_released = false;
+                k_1_pressed = false;
+                k_1_released = false;
+                k_2_pressed = false;
+                k_2_released = false;
+                k_3_pressed = false;
+                k_3_released = false;
+                k_4_pressed = false;
+                k_4_released = false;
+                k_5_pressed = false;
+                k_5_released = false;
+                k_6_pressed = false;
+                k_6_released = false;
+                k_7_pressed = false;
+                k_7_released = false;
+                k_8_pressed = false;
+                k_8_released = false;
+                k_9_pressed = false;
+                k_9_released = false;
+                k_up_pressed = false;
+                k_up_released = false;
+                k_down_pressed = false;
+                k_down_released = false;
+                k_left_pressed = false;
+                k_left_released = false;
+                k_right_pressed = false;
+                k_right_released = false;
+
+                m_left_pressed = false;
+                m_left_released = false;
+                m_right_pressed = false;
+                m_right_released = false;
+            }
+
+            void Get_Events() {
+                Reset_Events();
+                while (SDL_PollEvent(&ev)) {
+                    if (ev.type == SDL_QUIT) running = false;
+                    if (ev.type == SDL_MOUSEBUTTONDOWN) {
+                        if (ev.button.button == SDL_BUTTON_LEFT) {
+                            m_left_pressed = true;
+                            m_left_held = true;
+                        }
+                        if (ev.button.button == SDL_BUTTON_RIGHT) {
+                            m_right_pressed = true;
+                            m_right_held = true;
+                        }
+                    }
+                    if (ev.type == SDL_MOUSEBUTTONUP) {
+                        if (ev.button.button == SDL_BUTTON_LEFT) {
+                            m_left_released = true;
+                            m_left_held = false;
+                        }
+                        if (ev.button.button == SDL_BUTTON_RIGHT) {
+                            m_right_released = true;
+                            m_right_held = false;
+                        }
+                    }
+                    if (ev.type == SDL_MOUSEWHEEL) m_wheel_x = ev.wheel.x, m_wheel_y = ev.wheel.y;
+                    else if (ev.type == SDL_KEYDOWN) {
+                        switch (ev.key.keysym.sym) {
+                        case SDLK_a:
+
+                            k_a_pressed = true;
+                            k_a_held = true;
+
+                            break;
+
+                        case SDLK_b:
+
+                            k_b_pressed = true;
+                            k_b_held = true;
+
+                            break;
+
+                        case SDLK_c:
+
+                            k_c_pressed = true;
+                            k_c_held = true;
+
+                            break;
+
+                        case SDLK_d:
+
+                            k_d_pressed = true;
+                            k_d_held = true;
+
+                            break;
+
+                        case SDLK_e:
+
+                            k_e_pressed = true;
+                            k_e_held = true;
+
+                            break;
+
+                        case SDLK_f:
+
+                            k_f_pressed = true;
+                            k_f_held = true;
+
+                            break;
+
+                        case SDLK_g:
+
+                            k_g_pressed = true;
+                            k_g_held = true;
+
+                            break;
+
+                        case SDLK_h:
+
+                            k_h_pressed = true;
+                            k_h_held = true;
+
+                            break;
+
+                        case SDLK_i:
+
+                            k_i_pressed = true;
+                            k_i_held = true;
+
+                            break;
+
+                        case SDLK_j:
+
+                            k_j_pressed = true;
+                            k_j_held = true;
+
+                            break;
+
+                        case SDLK_k:
+
+                            k_k_pressed = true;
+                            k_k_held = true;
+
+                            break;
+
+                        case SDLK_l:
+
+                            k_l_pressed = true;
+                            k_l_held = true;
+
+                            break;
+
+                        case SDLK_m:
+
+                            k_m_pressed = true;
+                            k_m_held = true;
+
+                            break;
+
+                        case SDLK_n:
+
+                            k_n_pressed = true;
+                            k_n_held = true;
+
+                            break;
+
+                        case SDLK_o:
+
+                            k_o_pressed = true;
+                            k_o_held = true;
+
+                            break;
+
+                        case SDLK_p:
+
+                            k_p_pressed = true;
+                            k_p_held = true;
+
+                            break;
+
+                        case SDLK_q:
+
+                            k_q_pressed = true;
+                            k_q_held = true;
+
+                            break;
+
+                        case SDLK_r:
+
+                            k_r_pressed = true;
+                            k_r_held = true;
+
+                            break;
+
+                        case SDLK_s:
+
+                            k_s_pressed = true;
+                            k_s_held = true;
+
+                            break;
+
+                        case SDLK_t:
+
+                            k_t_pressed = true;
+                            k_t_held = true;
+
+                            break;
+
+                        case SDLK_u:
+
+                            k_u_pressed = true;
+                            k_u_held = true;
+
+                            break;
+
+                        case SDLK_v:
+
+                            k_v_pressed = true;
+                            k_v_held = true;
+
+                            break;
+
+                        case SDLK_w:
+
+                            k_w_pressed = true;
+                            k_w_held = true;
+
+                            break;
+
+                        case SDLK_x:
+
+                            k_x_pressed = true;
+                            k_x_held = true;
+
+                            break;
+
+                        case SDLK_y:
+
+                            k_y_pressed = true;
+                            k_y_held = true;
+
+                            break;
+
+                        case SDLK_z:
+
+                            k_z_pressed = true;
+                            k_z_held = true;
+
+                            break;
+
+                        case SDLK_SPACE:
+
+                            k_space_pressed = true;
+                            k_space_held = true;
+
+                            break;
+
+                        case SDLK_RETURN:
+
+                            k_enter_pressed = true;
+                            k_enter_held = true;
+
+                            break;
+
+                        case SDLK_ESCAPE:
+
+                            k_escape_pressed = true;
+                            k_escape_held = true;
+
+                            break;
+
+                        case SDLK_LSHIFT:
+                        case SDLK_RSHIFT:
+
+                            k_shift_pressed = true;
+                            k_shift_held = true;
+
+                            break;
+
+                        case SDLK_LCTRL:
+                        case SDLK_RCTRL:
+
+                            k_ctrl_pressed = true;
+                            k_ctrl_held = true;
+
+                            break;
+
+                        case SDLK_LALT:
+                        case SDLK_RALT:
+
+                            k_alt_pressed = true;
+                            k_alt_held = true;
+
+                            break;
+
+                        case SDLK_SEMICOLON:
+
+                            k_semicolon_pressed = true;
+                            k_semicolon_held = true;
+
+                            break;
+
+                        case SDLK_PERIOD:
+
+                            k_period_pressed = true;
+                            k_period_held = true;
+
+                            break;
+
+                        case SDLK_COMMA:
+
+                            k_comma_pressed = true;
+                            k_comma_held = true;
+
+                            break;
+
+                        case SDLK_SLASH:
+
+                            k_slash_pressed = true;
+                            k_slash_held = true;
+
+                            break;
+
+                        case SDLK_BACKSLASH:
+
+                            k_backslash_pressed = true;
+                            k_backslash_held = true;
+
+                            break;
+
+                        case SDLK_ASTERISK:
+
+                            k_asterisk_pressed = true;
+                            k_asterisk_held = true;
+
+                            break;
+
+                        case SDLK_EQUALS:
+
+                            k_equals_pressed = true;
+                            k_equals_held = true;
+
+                            break;
+
+                        case SDLK_MINUS:
+
+                            k_minus_pressed = true;
+                            k_minus_held = true;
+
+                            break;
+
+                        case SDLK_UP:
+
+                            k_up_pressed = true;
+                            k_up_held = true;
+
+                            break;
+
+                        case SDLK_DOWN:
+
+                            k_down_pressed = true;
+                            k_down_held = true;
+
+                            break;
+
+                        case SDLK_LEFT:
+
+                            k_left_pressed = true;
+                            k_left_held = true;
+
+                            break;
+
+                        case SDLK_RIGHT:
+
+                            k_right_pressed = true;
+                            k_right_held = true;
+                            break;
+                        default:
+                            events.push_back(ev);
+                        }
+                    }
+                    else if (ev.type == SDL_KEYUP) {
+                        switch (ev.key.keysym.sym) {
+                        case SDLK_a:
+                            k_a_released = true;
+                            k_a_held = false;
+                            break;
+
+                        case SDLK_b:
+                            k_b_released = true;
+                            k_b_held = false;
+                            break;
+
+                        case SDLK_c:
+                            k_c_released = true;
+                            k_c_held = false;
+                            break;
+
+                        case SDLK_d:
+                            k_d_released = true;
+                            k_d_held = false;
+                            break;
+
+                        case SDLK_e:
+                            k_e_released = true;
+                            k_e_held = false;
+                            break;
+
+                        case SDLK_f:
+                            k_f_released = true;
+                            k_f_held = false;
+                            break;
+
+                        case SDLK_g:
+                            k_g_released = true;
+                            k_g_held = false;
+                            break;
+
+                        case SDLK_h:
+                            k_h_released = true;
+                            k_h_held = false;
+                            break;
+
+                        case SDLK_i:
+                            k_i_released = true;
+                            k_i_held = false;
+                            break;
+
+                        case SDLK_j:
+                            k_j_released = true;
+                            k_j_held = false;
+                            break;
+
+                        case SDLK_k:
+                            k_k_released = true;
+                            k_k_held = false;
+                            break;
+
+                        case SDLK_l:
+                            k_l_released = true;
+                            k_l_held = false;
+                            break;
+
+                        case SDLK_m:
+                            k_m_released = true;
+                            k_m_held = false;
+                            break;
+
+                        case SDLK_n:
+                            k_n_released = true;
+                            k_n_held = false;
+                            break;
+
+                        case SDLK_o:
+                            k_o_released = true;
+                            k_o_held = false;
+                            break;
+
+                        case SDLK_p:
+                            k_p_released = true;
+                            k_p_held = false;
+                            break;
+
+                        case SDLK_q:
+                            k_q_released = true;
+                            k_q_held = false;
+                            break;
+
+                        case SDLK_r:
+                            k_r_released = true;
+                            k_r_held = false;
+                            break;
+
+                        case SDLK_s:
+                            k_s_released = true;
+                            k_s_held = false;
+                            break;
+
+                        case SDLK_t:
+                            k_t_released = true;
+                            k_t_held = false;
+                            break;
+
+                        case SDLK_u:
+                            k_u_released = true;
+                            k_u_held = false;
+                            break;
+
+                        case SDLK_v:
+                            k_v_released = true;
+                            k_v_held = false;
+                            break;
+
+                        case SDLK_w:
+                            k_w_released = true;
+                            k_w_held = false;
+                            break;
+
+                        case SDLK_x:
+                            k_x_released = true;
+                            k_x_held = false;
+                            break;
+
+                        case SDLK_y:
+                            k_y_released = true;
+                            k_y_held = false;
+                            break;
+
+                        case SDLK_z:
+                            k_z_released = true;
+                            k_z_held = false;
+                            break;
+
+                        case SDLK_SPACE:
+                            k_space_released = true;
+                            k_space_held = false;
+                            break;
+
+                        case SDLK_RETURN:
+                            k_enter_released = true;
+                            k_enter_held = false;
+                            break;
+
+                        case SDLK_ESCAPE:
+                            k_escape_released = true;
+                            k_escape_held = false;
+                            break;
+
+                        case SDLK_LSHIFT:
+                        case SDLK_RSHIFT:
+                            k_shift_released = true;
+                            k_shift_held = false;
+                            break;
+
+                        case SDLK_LCTRL:
+                        case SDLK_RCTRL:
+                            k_ctrl_released = true;
+                            k_ctrl_held = false;
+                            break;
+
+                        case SDLK_LALT:
+                        case SDLK_RALT:
+                            k_alt_released = true;
+                            k_alt_held = false;
+                            break;
+
+                        case SDLK_SEMICOLON:
+                            k_semicolon_released = true;
+                            k_semicolon_held = false;
+                            break;
+
+                        case SDLK_PERIOD:
+                            k_period_released = true;
+                            k_period_held = false;
+                            break;
+
+                        case SDLK_COMMA:
+                            k_comma_released = true;
+                            k_comma_held = false;
+                            break;
+
+                        case SDLK_SLASH:
+                            k_slash_released = true;
+                            k_slash_held = false;
+                            break;
+
+                        case SDLK_BACKSLASH:
+                            k_backslash_released = true;
+                            k_backslash_held = false;
+                            break;
+
+                        case SDLK_ASTERISK:
+                            k_asterisk_released = true;
+                            k_asterisk_held = false;
+                            break;
+
+                        case SDLK_EQUALS:
+                            k_equals_released = true;
+                            k_equals_held = false;
+                            break;
+
+                        case SDLK_MINUS:
+                            k_minus_released = true;
+                            k_minus_held = false;
+                            break;
+
+                        case SDLK_UP:
+                            k_up_released = true;
+                            k_up_held = false;
+                            break;
+
+                        case SDLK_DOWN:
+                            k_down_released = true;
+                            k_down_held = false;
+                            break;
+
+                        case SDLK_LEFT:
+                            k_left_released = true;
+                            k_left_held = false;
+                            break;
+
+                        case SDLK_RIGHT:
+                            k_right_released = true;
+                            k_right_held = false;
+                            break;
+                        default:
+                            events.push_back(ev);
+                        }
+
+                    }
+                    else events.push_back(ev);
+                }
+            }
+
+            bool Event_Loop() {
+                static int iteration = 0;
+                if (iteration == events.size()) return false;
+                event = events[iteration];
+                iteration++;
+
+                event.window.windowID = SDL_GetWindowID(win);
+                return true;
+            }
+            SDL_Event event;
+        private:
+            SDL_Event ev;
+            std::vector<SDL_Event> events;
+
+            int last_m_x = 0;
+            int last_m_y = 0;
+            double lastfps = 0;
+
+            void Cap_FPS(int cap) {
+                // Calculate the maximum frame time allowed for the desired FPS
+                double maxFT = 1.0 / cap;
+
+                // Get the time at the end of the frame
+                double frameEndTime = SDL_GetTicks() / 1000.0;
+
+                // Calculate the time it took to process the current frame
+                double frameTime = frameEndTime - lastFrameEndTime;
+
+                // Calculate the delay needed to cap the frame rate (if necessary)
+                double delayTime = maxFT - frameTime;
+
+                // Check if delay is needed and perform it
+                if (delayTime > 0) {
+                    SDL_Delay(static_cast<Uint32>(delayTime * 1000.0)); // Convert to milliseconds
+                }
+
+                // Update the time for the end of the next frame
+                lastFrameEndTime = SDL_GetTicks() / 1000.0;
+            }
+
+
+            // Place this declaration outside the function
+            double lastFrameEndTime = 0.0;
+
+            double FPS() {
+                static int frameCount = 0;
+                static double lastTime = 0.0;
+                double currentTime = SDL_GetTicks() / 1000.0;  // Get current time in seconds
+                frameCount++;
+
+                if (currentTime - lastTime >= 1.0) {
+                    double fps = static_cast<double>(frameCount) / (currentTime - lastTime);
+                    lastTime = currentTime;
+                    frameCount = 0;
+                    lastfps = fps; // Update lastFPS when the calculation is done
+                }
+
+                return lastfps; // Return lastFPS, which may be the last calculated FPS or -1.0
+            }
+
+            double Get_DT() {
+                static double lastTime = SDL_GetTicks() / 1000.0;
+                double currentTime = SDL_GetTicks() / 1000.0;
+                double deltaTime = currentTime - lastTime;
+                lastTime = currentTime;
+                return deltaTime;
+            }
+
+        };
+    }
+    // a button, made for ease of use
+    struct button {
+        int x;
+        int y;
+        int w;
+        int h;
+        std::string file;
+        bool pressed = false;
+        button(int _x, int _y, int _w, int _h, std::string _file = "") {
+            x = _x;
+            y = _y;
+            w = _w;
+            h = _h;
+            file = _file;
+
+        }
+        void press(int mx, int my, bool clicking) {
+            pressed = (mx > x and mx < x + w and my > y and my < y + h);
+        }
+    };
+    // ease.
+    class Ease {
+    private:
+        double time;
+        double from;
+        double to;
+        int mode;
+        double TimeAtStart;
+
+    public:
+
+        Ease(double atime, double afrom, double ato, int amode) {
+            time = atime;
+            from = afrom;
+            to = ato;
+            mode = amode;
+            reset();
+        }
+        double elapsed;
+        bool done = false;
+
+        double Get_Ease() {
+            elapsed = (SDL_GetTicks() - TimeAtStart) / 1000;
+            if (time <= 0.0) {
+                std::cerr << "Error: Total duration must be greater than zero." << std::endl;
+                return 0.0;
+            }
+
+            // Ensure elapsedTime is within the valid range [0, totalDuration]
+            elapsed = ((elapsed < time ? elapsed : time) < 0.0 ? 0.0 : (elapsed < time ? elapsed : time));
+            if (elapsed == time) done = true;
+
+            // Calculate A as a percentage of elapsed time over total duration
+            double A = (elapsed / time) * 100.0;
+            double B = from;
+            double C = to;
+            int D = mode;
+            switch (D - 1) {
+            case 0:
+                return (((C - B) / 100) * A) + B;
+            case 1:
+                return B + ((SineIn(A)) * (C - B));
+            case 2:
+                return B + (SineOut(A) * (C - B));
+            case 3:
+                return B + ((SineInOut(A)) * (C - B));
+            case 4:
+                return B + (CubicIn(A) * (C - B));
+            case 5:
+                return B + (CubicOut(A) * (C - B));
+            case 6:
+                return B + (CubicInOut(A) * (C - B));
+            case 7:
+                return B + (QuintIn(A) * (C - B));
+            case 8:
+                return B + (QuintOut(A) * (C - B));
+            case 9:
+                return B + (QuintInOut(A) * (C - B));
+            case 10:
+                return B + (CircIn(A) * (C - B));
+            case 11:
+                return B + (CircOut(A) * (C - B));
+            case 12:
+                return B + (CircInOut(A) * (C - B));
+            case 13:
+                return B + (ElasticIn(A) * (C - B));
+            case 14:
+                return B + (ElasticOut(A) * (C - B));
+            case 15:
+                return B + (ElasticInOut(A) * (C - B));
+            case 16:
+                return B + (QuadIn(A) * (C - B));
+            case 17:
+                return B + (QuadOut(A) * (C - B));
+            case 18:
+                return B + (QuadInOut(A) * (C - B));
+            case 19:
+                return B + (QuartIn(A) * (C - B));
+            case 20:
+                return B + (QuartOut(A) * (C - B));
+            case 21:
+                return B + (QuartInOut(A) * (C - B));
+            case 22:
+                return B + (ExpoIn(A) * (C - B));
+            case 23:
+                return B + (ExpoOut(A) * (C - B));
+            case 24:
+                return B + (ExpoInOut(A) * (C - B));
+            case 25:
+                return B + (BackIn(A) * (C - B));
+            case 26:
+                return B + (BackOut(A) * (C - B));
+            case 27:
+                return B + (BackInOut(A) * (C - B));
+            case 28:
+                return B + ((BounceIn(A / 100)) * (C - B));
+            case 29:
+                return B + ((BounceOut(A / 100)) * (C - B));
+            case 30:
+                return B + ((BounceInOut(A / 100)) * (C - B));
+            default:
+                return 0;
+            }
+            // MADE BY JR01
+        }
+        void reset() {
+            TimeAtStart = SDL_GetTicks();
+            done = false;
+        }
+    private:
+        //------------------------
+        //        EASES          |
+        //------------------------
+
+        double SineIn(double A) {
+            return 1 - cos((A / 100) * M_PI / 2);
+        }
+        double SineOut(double A) {
+            return std::sin((A / 100) * M_PI / 2);
+        }
+        double SineInOut(double A) {
+            return -(std::cos(M_PI * (A / 100)) - 1) / 2;
+        }
+        double CubicIn(double A) {
+            return std::pow(A / 100, 3);
+        }
+        double CubicOut(double A) {
+            return 1 - std::pow(1 - A / 100, 3);
+        }
+        double CubicInOut(double A) {
+            return (A / 100) < 0.5 ? 4 * std::pow(A / 100, 3) : 1 - std::pow(-2 * (A / 100) + 2, 3) / 2;
+        }
+        double QuintIn(double A) {
+            return std::pow(A / 100, 5);
+        }
+        double QuintOut(double A) {
+            return 1 - std::pow(1 - A / 100, 5);
+        }
+        double QuintInOut(double A) {
+            return (A / 100) < 0.5 ? 16 * std::pow(A / 100, 5) : 1 - std::pow(-2 * (A / 100) + 2, 5) / 2;
+        }
+        double CircIn(double A) {
+            return 1 - std::sqrt(1 - std::pow(A / 100, 2));
+        }
+        double CircOut(double A) {
+            return std::sqrt(1 - std::pow(A / 100 - 1, 2));
+        }
+        double CircInOut(double A) {
+            return (A / 100) < 0.5 ? (1 - std::sqrt(1 - std::pow(2 * (A / 100), 2))) / 2 : (std::sqrt(1 - std::pow(-2 * (A / 100) + 2, 2)) + 1) / 2;
+        }
+        double ElasticIn(double A) {
+            double c4 = (2 * M_PI) / 3;
+            return (A / 100) == 0 ? 0 : (A / 100) == 1 ? 1 : -std::pow(2, 10 * (A / 100) - 10) * std::sin(((A / 100) * 10 - 10.75) * c4);
+        }
+        double ElasticOut(double A) {
+            double c4 = (2 * M_PI) / 3;
+            return (A / 100) == 0 ? 0 : (A / 100) == 1 ? 1 : std::pow(2, -10 * (A / 100)) * std::sin(((A / 100) * 10 - 0.75) * c4) + 1;
+        }
+        double ElasticInOut(double A) {
+            double c5 = (2 * M_PI) / 4.5;
+            return (A / 100) == 0 ? 0 : (A / 100) == 1 ? 1 : (A / 100) < 0.5 ? -(std::pow(2, 20 * (A / 100) - 10) * std::sin((20 * (A / 100) - 11.125) * c5)) / 2 : (std::pow(2, -20 * (A / 100) + 10) * std::sin((20 * (A / 100) - 11.125) * c5)) / 2 + 1;
+        }
+        double QuadIn(double A) {
+            return std::pow(A / 100, 2);
+        }
+        double QuadOut(double A) {
+            return 1 - (1 - A / 100) * (1 - A / 100);
+        }
+        double QuadInOut(double A) {
+            return (A / 100) < 0.5 ? 2 * std::pow(A / 100, 2) : 1 - std::pow(-2 * (A / 100) + 2, 2) / 2;
+        }
+        double QuartIn(double A) {
+            return std::pow(A / 100, 4);
+        }
+        double QuartOut(double A) {
+            return 1 - std::pow(1 - A / 100, 4);
+        }
+        double QuartInOut(double A) {
+            return (A / 100) < 0.5 ? 8 * std::pow(A / 100, 4) : 1 - std::pow(-2 * (A / 100) + 2, 4) / 2;
+        }
+        double ExpoIn(double A) {
+            return (A / 100) == 0 ? 0 : std::pow(2, 10 * (A / 100) - 10);
+        }
+        double ExpoOut(double A) {
+            return (A / 100) == 1 ? 1 : 1 - std::pow(2, -10 * (A / 100));
+        }
+        double ExpoInOut(double A) {
+            return (A / 100) == 0 ? 0 : (A / 100) == 1 ? 1 : (A / 100) < 0.5 ? std::pow(2, 20 * (A / 100) - 10) / 2 : (2 - std::pow(2, -20 * (A / 100) + 10)) / 2;
+        }
+        double BackIn(double A) {
+            double c1 = 1.70158;
+            double c3 = c1 + 1;
+            return c3 * std::pow(A / 100, 3) - c1 * std::pow(A / 100, 2);
+        }
+        double BackOut(double A) {
+            double c1 = 1.70158;
+            double c3 = c1 + 1;
+            return 1 + c3 * std::pow(A / 100 - 1, 3) + c1 * std::pow(A / 100 - 1, 2);
+        }
+        double BackInOut(double A) {
+            double c1 = 1.70158;
+            double c2 = c1 * 1.525;
+            return (A / 100) < 0.5 ? (std::pow(2 * (A / 100), 2) * ((c2 + 1) * 2 * (A / 100) - c2)) / 2 : (std::pow(2 * (A / 100) - 2, 2) * ((c2 + 1) * ((A / 100) * 2 - 2) + c2) + 2) / 2;
+        }
+        double BounceOut(double A) {
+            double n1 = 7.5625;
+            double d1 = 2.75;
+            if (A < 1 / d1) {
+                return n1 * A * A;
+            }
+            else if (A < 2 / d1) {
+                return n1 * (A -= 1.5 / d1) * A + 0.75;
+            }
+            else if (A < 2.5 / d1) {
+                return n1 * (A -= 2.25 / d1) * A + 0.9375;
+            }
+            else {
+                return n1 * (A -= 2.625 / d1) * A + 0.984375;
+            }
+        }
+        double BounceIn(double A) {
+            return 1 - BounceOut(1 - A);
+        }
+        double BounceInOut(double A) {
+            return A < 0.5 ? (1 - BounceOut(1 - 2 * A)) / 2 : (1 + BounceOut(2 * A - 1)) / 2;
+        }
+    };
+    // a timer, based on real time. 
+    class Timer {
+       
+    private:
+        std::chrono::high_resolution_clock::time_point startTime;
+
+    public:
+        Timer() {
+            Reset();
+        }
+
+        void Reset() {
+            startTime = std::chrono::high_resolution_clock::now();
+        }
+
+        double Get_Time() const {
+            auto currentTime = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double> elapsedTime = currentTime - startTime;
+            return elapsedTime.count();
+        }
+    };
+
+    //------------------------
+    //       variables       |
+    //------------------------
+
+
+
+
+// blend two colors together. add a factor as a third argurement, and the closer it is to 0, the closer the color is to color 1, factor can only be from 0 to 1
+    SDL_Color Blend_color(const SDL_Color color1, const SDL_Color color2, float factor = 0.5f, int alpha = 0) {
+        // Ensure the factor is within the range [0, 1]
+        factor = (factor > 1.0f ? 1.0f : (factor < 0.0f ? 0.0f : factor));
+
+        // Calculate the blended color component-wise
+        Uint8 r = static_cast<Uint8>((1.0f - factor) * color1.r + factor * color2.r);
+        Uint8 g = static_cast<Uint8>((1.0f - factor) * color1.g + factor * color2.g);
+        Uint8 b = static_cast<Uint8>((1.0f - factor) * color1.b + factor * color2.b);
+        Uint8 a = static_cast<Uint8>((1.0f - factor) * color1.a + factor * color2.a);
+
+        SDL_Color blendedColor = { r, g, b, (alpha == 0 ? a : alpha) };
+        return blendedColor;
+    }
+
+    //---------------------
+    //         MATH       |
+    //---------------------
+
+    int Angle_To(int X, int Y, int X1, int Y1) {
+        int a, b;
+        double c;  // Use double for the result to avoid integer division
+
+        a = abs(X1 - X);
+        b = abs(Y1 - Y);
+
+        if (a == 0) {
+            if (b == 0) {
+                // Handle case when both points are the same
+                return 0; // Return 0 degrees or 0 radians
+            }
+            else {
+                // Handle case when points are aligned vertically
+                return 90; // Return 90 degrees or pi/2 radians
+            }
+        }
+
+        c = atan2(b, a); // Use atan2 to calculate the angle in radians
+        // Convert radians to degrees
+        return static_cast<double>(c * 180 / M_PI);
+    }
+
+    double Distance_To(int x, int y, int x1, int y1) {
+        int a = x1 - x;
+        int b = y1 - y;
+        int c = sqrt(a * a + b * b);
+        return abs(c);
+    }
+
+    b2Vec2 AngleAndDistance_To(int x, int y, double angle, double distance) {
+        // Convert angle from degrees to radians
+        double radians = angle * M_PI / 180.0;
+
+        // Calculate the destination coordinates as doubles
+        double dx = distance * cos(radians);
+        double dy = distance * sin(radians);
+
+        return { static_cast<float32>(dx + x), static_cast<float32>(dy + y) };
+    }
+
+    int Random(int num1, int num2) {
+        std::random_device dev;
+        std::default_random_engine gen{dev()};
+        std::uniform_int_distribution<int> dis{num1, num2};
+        return dis(gen);
+    }
+
+    SDL_Color Random_Color() {
+        SDL_Color color = { Random(0,255),Random(0,255),Random(0,255),255 };
+        return color;
+    }
+
+    std::vector<std::vector<SDL_Color>> bmp_To_Vector(std::string Path) {
+        SDL_Surface* surface = SDL_LoadBMP(Path.c_str());
+        if (!surface) {
+            // Handle error
+            return {};
+        }
+
+        std::vector<std::vector<SDL_Color>> pixelData(surface->h, std::vector<SDL_Color>(surface->w));
+
+        for (int y = 0; y < surface->h; ++y) {
+            for (int x = 0; x < surface->w; ++x) {
+                Uint32 pixel = *((Uint32*)surface->pixels + y * surface->w + x);
+                Uint8 r, g, b, a;
+                SDL_GetRGBA(pixel, surface->format, &r, &g, &b, &a);
+                pixelData[y][x] = { r, g, b, a };
+            }
+        }
+
+        SDL_FreeSurface(surface);
+        return pixelData;
+    }
+
+    char* vector_To_Bmp(const std::vector<std::vector<SDL_Color>>& pixelData, std::string location, std::string name) {
+        int width = pixelData[0].size();
+        int height = pixelData.size();
+
+        SDL_Surface* surface = SDL_CreateRGBSurface(0, width, height, 32, 0xFF000000, 0x00FF0000, 0x0000FF00, 0x000000FF);
+        if (!surface) {
+            SDL_Log("Unable to create surface: %s", SDL_GetError());
+            return nullptr;
+        }
+
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                SDL_Color color = pixelData[y][x];
+                Uint32 pixelValue = SDL_MapRGBA(surface->format, color.r, color.g, color.b, color.a);
+                *((Uint32*)surface->pixels + y * width + x) = pixelValue;
+            }
+        }
+
+        std::string fileName = location + name + ".bmp";
+
+        if (SDL_SaveBMP(surface, fileName.c_str()) != 0) {
+            SDL_Log("Unable to save BMP: %s", SDL_GetError());
+            SDL_FreeSurface(surface);
+            return nullptr;
+        }
+
+        SDL_FreeSurface(surface);
+
+        // Convert the file name to char* and return
+        char* charFileName = new char[fileName.size() + 1];
+        strcpy_s(charFileName, fileName.size() + 1, fileName.c_str());
+        return charFileName;
+    }
+
+    SDL_Surface* Sprite_To_Surface(std::string file) {
+        return SDL_LoadBMP(file.c_str());
+    }
+
+    void debug(std::string valname, double value, std::string additional = "") {
+        std::cout << "\n" + valname + ": ";
+        std::cout << value;
+        std::cout << additional;
+    }
+    void debug(std::string valname, std::string value, std::string additional = "") {
+        std::cout << "\n" + valname + ": ";
+        std::cout << value;
+        std::cout << additional;
+    }
+    void debug(std::string valname, bool value, std::string additional = "") {
+        std::cout << "\n" + valname + ": ";
+        std::cout << (value == true ? "true" : "false");
+        std::cout << additional;
+    }
+    void debug(std::string valname, std::vector<int> list, std::string additional = "") {
+        std::cout << "\n" + valname + ": " + "{ ";
+        for (int i = 0; i < list.size(); i++) {
+            std::cout << list[i] << (i == list.size() - 1 ? " " : ", ");
+        }
+        std::cout << "}" + additional;
+    }
+    void debug(std::string valname, std::vector<float> list, std::string additional = "") {
+        std::cout << "\n" + valname + ": " + "{ ";
+        for (int i = 0; i < list.size(); i++) {
+            std::cout << list[i] << (i == list.size() - 1 ? " " : ", ");
+        }
+        std::cout << "}" + additional;
+    }
+    void debug(std::string valname, std::vector < double > list, std::string additional = "") {
+        std::cout << "\n" + valname + ": " + "{ ";
+        for (int i = 0; i < list.size(); i++) {
+            std::cout << list[i] << (i == list.size() - 1 ? " " : ", ");
+        }
+        std::cout << "}" + additional;
+    }
+    void debug(std::string valname, std::vector<bool> list, std::string additional = "") {
+        std::cout << "\n" + valname + ": " + "{ ";
+        for (int i = 0; i < list.size(); i++) {
+            std::cout << (list[i] == true ? "true" : "false") << (i == list.size() - 1 ? " " : ", ");
+        }
+        std::cout << "}" + additional;
+    }
+    void debug(std::string valname, std::vector<std::string> list, std::string additional = "") {
+        std::cout << "\n" + valname + ": " + "{ ";
+        for (int i = 0; i < list.size(); i++) {
+            std::cout << list[i] << (i == list.size() - 1 ? " " : ", ");
+        }
+        std::cout << "}" + additional;
+    }
+
+}
+/*
+SDL_Texture* Get_Circle(SDL_Color color) {
+    void* pixels;
+    int pitch;
+    SDL_Texture* t;
+
+    if (SDL_LockTexture(t, nullptr, &pixels, &pitch) != 0) {
+        for (int x = 0; x < 100; x++) {
+            for (int y = 0; y < 100; y++) {
+                if (Distance_To(50, 50, x, y) > 50) Set_TexturePixel(t, x, y, color);
+            }
+        }
+    }
+}
+*/
