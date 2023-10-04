@@ -6,7 +6,6 @@
 // SDL
 #include <SDL.h>
 #include <SDL_image.h>
-
 //#include <SDL_ttf.h>
 //#include <SDL_mixer.h>
 // Box2D
@@ -18,6 +17,7 @@
 #include <unordered_map>
 #include <string>
 #include <iostream>
+#include <fstream>
 // random 
 #include <random>
 // time
@@ -121,16 +121,44 @@ namespace ogf {
         }
     };
 
+    struct _sprite {
+
+        SDL_Rect dst;
+        std::string spr;
+        int gameLayer;
+        int x, y, w, h;
+        double angle;
+        _sprite(int X, int Y, int W, int H, double Angle, std::string sprite, SDL_Rect dest, int gamel) {
+            spr = sprite;
+            x = X;
+            y = Y;
+            w = W;
+            h = H;
+            angle = Angle;
+            gameLayer = gamel;
+            dst = dest;
+        }
+    };
+
     // use this namespace if you want physics in your game
     namespace Physics {
 
         struct type {
         public:
             type() {}
-            type(std::string id) {
+            type(std::string _spr = "NULL", int _b_type = 1, int _c_type = 2, int _w = 1, int _h = 1, double _mass = 40) {
+                spr = _spr;
+                b_type = _b_type;
+                w = _w;
+                h = _h;
+                mass = _mass;
             }
-            float w;
-            float h;
+            std::string spr = "NULL";
+            int b_type = 1;
+            int c_type = 2;
+            int w = 1;
+            int h = 1;
+            double mass;
         };
 
         struct camera {
@@ -149,10 +177,10 @@ namespace ogf {
             }
         };
 
-        struct raycast {
+        struct _rc {
 
-            raycast() {}
-            raycast(b2World* worl, double _x1, double _y1, bool st,double _x, double _y, b2Body* _b1, b2Body* _b2) {
+            _rc() {}
+            _rc(b2World* worl, double _x1, double _y1, bool st,double _x, double _y, b2Body* _b1, b2Body* _b2) {
                 x1 = _x1;
                 world = worl;
                 y1 = _y1;
@@ -168,7 +196,9 @@ namespace ogf {
             double y;
             b2Body* b1;
             b2Body* b2;
+            double normal;
             bool stop;
+            float fraction;
             b2World* world;
             b2RayCastInput inp;
             b2RayCastOutput out;
@@ -195,17 +225,36 @@ namespace ogf {
                     if (output.fraction < closestFraction) {
                         hit = is;
                         
+
+
                         closestFraction = output.fraction;
                         intersectionNormal = output.normal;
+                    
+
+                        // Calculate the angle in radians
+                        normal = std::atan2(output.normal.y, output.normal.x);
+
+                        // Convert the angle to degrees if needed
+                        normal *= 180.0f / b2_pi;
                     }
 
-                }
-
+                } 
+                fraction = closestFraction;
                 b2Vec2 intersectionPoint = st + closestFraction * (en - st);
                 hitPoint = intersectionPoint;
                 if (!hit && !stop) hitPoint = input.p2;
                 return hit;
             }
+        };
+
+        struct raycast {
+            bool hit = false;
+            float normal = 0;
+            float dist = 0;
+            double x = 0;
+            double y = 0;
+            double length = 0;
+            double angle = 0;
         };
 
         struct emmit {
@@ -221,7 +270,7 @@ namespace ogf {
         class Obj {
             public:
                 // Member Variables
-                type Type;
+                type* Type;
                 std::string sprite;
                 int collisions_type = 0;
                 bool isSolid = true;
@@ -266,23 +315,26 @@ namespace ogf {
                 }
 
                 // Initialize the Object
-                void def(b2World* _world, std::unordered_map<int, Obj>* _obj, double _x, double _y, double _W, double _H, double _mass, int _type) {
+                void def(type* t, b2World* _world, std::unordered_map<int, Obj>* _obj, double _x, double _y) {
                     world = _world,
                         x = _x / 32,
                         y = _y / 32,
-                        w = _W / 32,
-                        h = _H / 32,
-                        type = _type,
-                        mass = _mass,
+                        w = t->w / 32,
+                        h = t->h / 32,
+                        b_type = t->b_type,
+                        mass = t->mass,
                         obj = _obj,
-                        smass = mass;
+                        collisions_type = t->c_type,
+                        smass = mass,
+                        Type = t, 
+                        sprite = t->spr;
 
                     switch (collisions_type) {
                     case 1:
-                        Define_Circle(x, y, w, (M_PI * w * w) / _mass, _type);
+                        Define_Circle(x, y, w, (M_PI * w * w) / mass, b_type);
                         break;
                     case 2:
-                        Define_Box(x, y, w, h, w * h / _mass, _type);
+                        Define_Box(x, y, w, h, w * h / mass, b_type);
                         break;
                     }
                 }
@@ -302,11 +354,29 @@ namespace ogf {
                     if (!keys[1] and !keys[3]) xVel = 0; // Stop horizontal movement when both A and D are released
                 }
 
-                
+                std::vector<b2Vec2> Get_Shape_Points() {
+                    std::vector<b2Vec2> out;
+                    b2Shape* sh = body->GetFixtureList()->GetShape();
+                    b2PolygonShape* shape;
+                    if (!sh->e_circle) {
+                        shape = static_cast<b2PolygonShape*> (sh);
+                    }
+                    for (int i = 0; i < shape->GetVertexCount(); i++) {
+                        out.push_back(shape->GetVertex(i));
+                    }
+                    return out;
+                }
+
                 // Perform a Raycast and optionally draw it
-                bool RayCast(double dist, double angle, Obj* to, bool stop, bool Draw, bool ddm = PHYSICS_REAL_DISPLAY_MODE, SDL_Color color = ORANGE) {
+                raycast RayCast(double dist, double angle, Obj* to, bool stop, bool Draw, bool ddm = PHYSICS_REAL_DISPLAY_MODE, SDL_Color color = ORANGE) {
+                    raycast out;
                     b2Vec2 s = AngleAndDistance_To(x, y, angle, dist);
-                    raycast rc = {
+                    out.x = s.x;
+                    out.y = s.y;
+                    out.angle = angle;
+                    out.length = dist;
+                    
+                    _rc rc = {
                         world,
                         s.x / 32,
                         s.y / -32,
@@ -316,8 +386,12 @@ namespace ogf {
                         body,
                         to->body,
                     };
-                    bool out = rc.check();
-
+                    out.hit = rc.check();
+                    out.dist = dist * rc.fraction;
+                    out.x = rc.hitPoint.x;
+                    out.y = rc.hitPoint.y;
+                    out.normal = rc.normal;
+                    
                     // Display ray if requested
                     if (Draw) {
                         if (rend != nullptr && cam != nullptr) {
@@ -457,9 +531,9 @@ namespace ogf {
                     y *= 32;
 
                     // Set solid using kinematic objects
-                    if (!isSolid && type == 1) body->SetType(b2_kinematicBody);
-                    if (isSolid && type == 1) body->SetType(b2_dynamicBody);
-                    if (type == 2) body->SetActive(isSolid);
+                    if (!isSolid && b_type == 1) body->SetType(b2_kinematicBody);
+                    if (isSolid && b_type == 1) body->SetType(b2_dynamicBody);
+                    if (b_type == 2) body->SetActive(isSolid);
 
                     // Set gravity and rotation
                     body->SetGravityScale(DoGravity * 32);
@@ -468,7 +542,7 @@ namespace ogf {
 
                     // Get contact list (collisions)
                     b2ContactEdge* c = body->GetContactList();
-
+                    
                     // Get collision list
                     int iterations = 0;
                     while (c) {
@@ -488,10 +562,11 @@ namespace ogf {
                 }
                 emmit* em = nullptr;
 
+               
             private:
                 int id;
                 double smass = 0;
-                int type = 1;
+                int b_type = 1;
                 int ct = 0;
                 camera* cam;
                 double impY = 0;
@@ -536,10 +611,9 @@ namespace ogf {
                 // Other Private Helper Functions ...
 
 
-                int Spawn(Physics::type t, double _x, double _y, double _W, double _H, double _mass = 40, int type = 1, int c_type = 2) {
+                int Spawn(Physics::type* t, double _x, double _y) {
                     Obj object;
-                    object.collisions_type = c_type;
-                    object.def(world, obj, _x + _W / 2, _y + _H / 2, _W, _H, _mass, type);
+                    object.def(t, world, obj, _x + t->w / 2, _y + t->h / 2);
 //                  object.w = _W;
 //                  object.h = _H;
                     object.sprite = "NULL";
@@ -592,7 +666,6 @@ namespace ogf {
                     SDL_Log("Unable to initialize SDL: %s", SDL_GetError());
                     return;
                 }
-
                 win = SDL_CreateWindow(_name.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, _W, _H, (resizable == true ? SDL_WINDOW_RESIZABLE : SDL_WINDOW_SHOWN));
                 name = _name;
                 if (!win) {
@@ -825,68 +898,15 @@ namespace ogf {
             bool Draw_hitboxes = false;
             // set max frame rate
             int max_FPS = 0;
-            // window textures to load and destroy
-            std::vector <SDL_Texture*> textures = {};
+            // sprites to load
+            std::vector<_sprite> sprites = {};
             // the window color
             SDL_Color color = { 255,255,255,255 };
             // clear the window with the window color.
             bool clear = true;
 
             // update the window and its properties
-            bool run() {
-                return running;
-            }
-            void Update() {
-                Reset_Events();
-                Get_Events();
-                Cap_FPS((max_FPS == 0 ? 2000 : max_FPS));
-
-                // mouse lock
-                if (m_lock) {
-                    int mx, my;
-                    SDL_GetMouseState(&mx, &my);
-                    m_x = W / 2 - mx, m_y = H / 2 - my;
-                }
-
-                // clear the screen
-                // change values
-                double z = cam.zoom / 100;
-                cam.PhysicsDisplayMode = PhysicsDisplayMode;
-                SDL_RenderSetScale(rend, z, z);
-
-                SDL_GetWindowSize(win, &W, &H);
-                if (fullscreen) {
-                    SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN);
-                    if (k_escape_pressed) fullscreen = false;
-                }
-                else {
-                    SDL_SetWindowFullscreen(win, 0);
-                }
-                SDL_ShowCursor(m_show);
-
-                if (!m_lock) SDL_GetMouseState(&m_x, &m_y);
-                fps = FPS();
-                world->Step(dt, 6, 2);
-
-                for (int i = 0; i < obj.size(); i++) {
-                    obj[i].Update();
-                    if (obj[i].sprite != "NULL" &&! obj[i].playing_animation) {
-                        if (PhysicsDisplayMode == PHYSICS_REAL_DISPLAY_MODE) Draw_Sprite(obj[i].x, obj[i].y, obj[i].w * 32, obj[i].h * 32, obj[i].Get_Angle() * (180 / M_PI) * (-1), obj[i].sprite);
-                        if (PhysicsDisplayMode == PHYSICS_DEBUG_DISPLAY_MODE) Draw_Sprite(obj[i].x / 32, obj[i].y / 32, obj[i].w, obj[i].h, obj[i].Get_Angle() * (180.0 / M_PI) * (-1), obj[i].sprite);
-                    }
-                }
-                if (Draw_hitboxes) Draw_Hitboxes();
-                std::string new_name = (!display_FPS ? name : name + "    fps: " + std::to_string(fps));
-                dt = Get_DT();
-                SDL_SetWindowTitle(win, new_name.c_str());
-                SDL_RenderPresent(rend);
-                if (clear) {
-                    SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
-                    SDL_RenderClear(rend);
-                }
-
-
-            }
+            
             void Set_Icon(std::string file) {
                 SDL_Surface* s = SDL_LoadBMP(file.c_str());
                 SDL_SetWindowIcon(win, s);
@@ -904,30 +924,7 @@ namespace ogf {
         public:
             bool PhysicsDisplayMode = PHYSICS_REAL_DISPLAY_MODE;
 
-
-            SDL_Texture* createTexture(SDL_Renderer* renderer, Uint8 r, Uint8 g, Uint8 b, Uint8 a)
-            {
-                // Create a 1x1 surface with the desired color
-                SDL_Surface* surface = SDL_CreateRGBSurface(0, 1, 1, 32, 0, 0, 0, 0);
-                if (!surface) {
-                    SDL_Log("SDL_CreateRGBSurface failed: %s", SDL_GetError());
-                    return nullptr;
-                }
-
-                // Fill the surface with the specified color
-                SDL_FillRect(surface, nullptr, SDL_MapRGBA(surface->format, r, g, b, a));
-
-                // Create a texture from the surface
-                SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-                if (!texture) {
-                    SDL_Log("SDL_CreateTextureFromSurface failed: %s", SDL_GetError());
-                }
-
-                // Free the surface since we no longer need it
-                SDL_FreeSurface(surface);
-
-                return texture;
-            }
+            bool paused = false;
 
             b2World* world = nullptr;
             std::unordered_map<int, Obj> obj = {};
@@ -936,14 +933,9 @@ namespace ogf {
                 world->SetGravity({ hor, vert * (-1) });
             }
 
-            int Spawn(type t, double _x, double _y, double _W, double _H, double _mass = 40, int type = 1, int c_type = 2) {
+            int Spawn(type* t, double _x, double _y) {
                 Obj object;
-                object.collisions_type = c_type;
-                object.def(world, &obj, _x + _W / 2, _y + _H / 2, _W, _H, _mass, type);
-                //                object.w = _W;
-                //                object.h = _H;
-                object.sprite = "NULL";
-                object.Type = t;
+                object.def(t, world, &obj, _x + t->w / 2, _y + t->h / 2);
                 obj[obj.size()] = object;
                 return obj.size() - 1;
             }
@@ -984,24 +976,12 @@ namespace ogf {
                 // Optionally use 'layer' argument for layer-specific logic
             }
 
-            void Load_Sprite(int x, int y, double angle, int width, int height, std::string file, SDL_Rect sorcrect = { 10,10,9,9 }, int layer = GAME_LAYER) {
-                if (layer == GAME_LAYER) {
-                    x -= cam.x;
-                    y -= cam.y;
-                }
+            SDL_Texture* Load_Sprite(std::string file) {
                 SDL_Texture* spriteTexture = SDL_CreateTextureFromSurface(rend, SDL_LoadBMP(file.c_str()));
-                SDL_Rect srcRect = { 0, 0, width, height };
-
-                if (sorcrect.x != 10 && sorcrect.y != 10 && sorcrect.w != 9 && sorcrect.h != 9) srcRect = sorcrect;
-                SDL_Rect destRect = { x, y, width, height };
-
                 if (!spriteTexture) {
                     SDL_Log("Unable to load sprite texture: %s", SDL_GetError());
                 }
-
-                SDL_RenderCopyEx(rend, spriteTexture, &srcRect, &destRect, angle, NULL, SDL_FLIP_NONE);
-                textures.push_back(spriteTexture);
-                // Optionally use 'layer' argument for layer-specific logic
+                return spriteTexture;
             }
             void Draw_Sprite(int x, int y, int width, int height, double angle, std::string file, SDL_Rect sorcrect = { 10,10,9,9 }, int layer = GAME_LAYER) {
                 if (layer == GAME_LAYER) {
@@ -1009,18 +989,8 @@ namespace ogf {
                     y -= cam.y;
                 }
                 SDL_Texture* spriteTexture = SDL_CreateTextureFromSurface(rend, SDL_LoadBMP(file.c_str()));
-                SDL_Rect srcRect = { 0, 0, width, height };
-
-                if (sorcrect.x != 10 && sorcrect.y != 10 && sorcrect.w != 9 && sorcrect.h != 9) srcRect = sorcrect;
-                SDL_Rect destRect = { x, y, width, height };
-
-                if (!spriteTexture) {
-                    SDL_Log("Unable to load sprite texture: %s", SDL_GetError());
-                }
-
-                SDL_RenderCopyEx(rend, spriteTexture, &srcRect, &destRect, angle, NULL, SDL_FLIP_NONE);
-                textures.push_back(spriteTexture);
-                // Optionally use 'layer' argument for layer-specific logic
+                _sprite s = { x,y,width,height,angle,file,sorcrect,layer };
+                sprites.push_back(s);
             }
 
             void Draw_Rect(int X, int Y, int W, int H, SDL_Color color, int layer = GAME_LAYER) {
@@ -1135,24 +1105,63 @@ namespace ogf {
                     x -= cam.x;
                     y -= cam.y;
                 }
-                SDL_Texture* t = createTexture(rend, color.r, color.g, color.b, color.a);
 
                 b2Vec2 last = AngleAndDistance_To(x, y, 0, rad / 2);
                 b2Vec2 first = last;
                 for (int angle = 1; angle <= 360; angle++) {
                     b2Vec2 point = AngleAndDistance_To(x, y, angle, rad / 2);
-                    SDL_Vertex vertices[3] = { { last.x, last.y }, { point.x, point.y }, { x, y } };
 
-                    SDL_Vertex* vertexArray[3] = { &vertices[0], &vertices[1], &vertices[2] };
-                    
+                    std::vector<SDL_Vertex> vertexArray {
+                        {{last.x, last.y }, color, { point.x, point.y }},
+                        { {point.x, point.y },	color, { static_cast<float> (x), static_cast<float> (y) } },
+                        { {static_cast<float> (x), static_cast<float> (y)},	color, {last.x, last.y} },
+                    };
+
                     // Now you can use vertexArray in your SDL_RenderGeometry function call
-                    SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
-                    SDL_SetRenderDrawColor(rend, 255, 0, 0, 255);
-                    SDL_RenderGeometry(rend, NULL, *vertexArray, 3, NULL, 0);
+                    SDL_RenderGeometry(rend, NULL, vertexArray.data(), 3, NULL, 0);
 
                     last = point;
                 }
             }
+
+            void Draw_Polygon(std::vector<SDL_Point> v, SDL_Color c) {
+                if (v.size() < 2) return;
+
+                SDL_Point first = v[0];
+                SDL_Point previous = first;
+
+                for (size_t i = 1; i < v.size(); i++) {
+                    SDL_Point current = v[i];
+                    Draw_Line(previous, current, c);
+                    previous = current;
+                }
+
+                // Connect the last point to the first one to close the shape
+                Draw_Line(previous, first, c);
+            }
+
+            void Fill_Polygon(const std::vector<SDL_Point> vertices, const SDL_Color color) {
+                int n = vertices.size();
+
+                    SDL_Vertex* verts = new SDL_Vertex[n];
+                    for (int i = 0; i < n; i++) {
+                        verts[i].position.x = vertices[i].x;
+                        verts[i].position.y = vertices[i].y;
+                        verts[i].color = color;
+                    }
+
+                    int *indices = new int[(n - 2) * 3];
+                    for (int i = 1; i < n - 1; i++) {
+                        indices[3 * (i - 1)] = 0;
+                        indices[3 * i - 2] = i;
+                        indices[3 * i - 1] = i + 1;
+                    }
+
+                    SDL_RenderGeometry(rend, NULL, verts, n, indices, (n - 2) * 3);
+                    free(indices);
+                    free(verts);
+                }
+            
 
             void Draw_Poly_Hitbox(Obj obj, int layer = GAME_LAYER) {
                 b2Vec2 pos = obj.body->GetPosition();
@@ -1932,7 +1941,7 @@ namespace ogf {
             }
             SDL_Event event;
             camera cam = { 0,0,W,H };
-        private:
+        //private:
             SDL_Event ev;
             std::vector<SDL_Event> events;
             void Draw_Hitboxes() {
@@ -2010,6 +2019,73 @@ namespace ogf {
                 }
             }
 
+            bool Update() {
+                Reset_Events();
+                Get_Events();
+
+                Cap_FPS((max_FPS == 0 ? 2000 : max_FPS));
+                // mouse lock
+                if (m_lock) {
+                    int mx, my;
+                    SDL_GetMouseState(&mx, &my);
+                    m_x = W / 2 - mx, m_y = H / 2 - my;
+                }
+
+                // clear the screen
+                // change values
+                double z = cam.zoom / 100;
+                cam.PhysicsDisplayMode = PhysicsDisplayMode;
+                SDL_RenderSetScale(rend, z, z);
+
+                SDL_GetWindowSize(win, &W, &H);
+                if (fullscreen) {
+                    SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN);
+                    if (k_escape_pressed) fullscreen = false;
+                }
+                else {
+                    SDL_SetWindowFullscreen(win, 0);
+                }
+                SDL_ShowCursor(m_show);
+
+                if (!m_lock) SDL_GetMouseState(&m_x, &m_y);
+                fps = FPS();
+                if (!paused) world->Step(dt, 6, 2);
+                
+                if (Draw_hitboxes) Draw_Hitboxes();
+                std::string new_name = (!display_FPS ? name : name + "    fps: " + std::to_string(fps));
+                dt = Get_DT();
+                SDL_SetWindowTitle(win, new_name.c_str());
+
+                for (int i = 0; i < sprites.size(); i++) {
+                    _sprite s = sprites[i];
+                    if (s.gameLayer == UI_LAYER) _Draw_Sprite(s.x, s.y, s.w, s.y, s.angle, s.spr);
+                }
+                for (int i = 0; i < obj.size(); i++)     {
+                    Obj* o = &obj[i];
+                    o->Update();
+                    if (o->sprite != "NULL") {
+                        if (PhysicsDisplayMode == PHYSICS_REAL_DISPLAY_MODE) _Draw_Sprite(o->x, o->y, o->w * 32, o->h * 32, o->Get_Angle() * (M_PI * 180) * (-1), o->sprite);
+                        if (PhysicsDisplayMode == PHYSICS_DEBUG_DISPLAY_MODE) _Draw_Sprite(o->x / 32, o->y / 32, o->w, o->h, o->Get_Angle() * (M_PI * 180) * (-1), o->sprite);
+                    }
+                }
+                for (int i = 0; i < sprites.size(); i++) {
+                    _sprite s = sprites[i];
+                    if (s.gameLayer == GAME_LAYER) Draw_Sprite(s.x, s.y, s.w, s.y, s.angle, s.spr);
+                }
+                for (int i = 0; i < sprites.size(); i++) {
+                    _sprite s = sprites[i];
+                    if (s.gameLayer == UI_LAYER) _Draw_Sprite(s.x, s.y, s.w, s.y, s.angle, s.spr);
+                }
+
+                SDL_RenderPresent(rend);
+
+                if (clear) {
+                    Clear();
+                }
+                sprites = {};
+                return running;
+            }
+
             int last_m_x = 0;
             int last_m_y = 0;
             double lastfps = 0;
@@ -2036,9 +2112,23 @@ namespace ogf {
                 // Update the time for the end of the next frame
                 lastFrameEndTime = SDL_GetTicks() / 1000.0;
             }
-        public:
 
-            // Place this declaration outside the function
+            void _Draw_Sprite(int x, int y, int width, int height, double angle, std::string file, SDL_Rect sorcrect = { 10,10,9,9 }) {
+
+                SDL_Texture* spriteTexture = SDL_CreateTextureFromSurface(rend, SDL_LoadBMP(file.c_str()));
+                SDL_Rect srcRect = { 0, 0, width, height };
+
+                if (sorcrect.x != 10 && sorcrect.y != 10 && sorcrect.w != 9 && sorcrect.h != 9) srcRect = sorcrect;
+                SDL_Rect destRect = { x, y, width, height };
+
+                if (!spriteTexture) {
+                    SDL_Log("Unable to load sprite texture: %s", SDL_GetError());
+                }
+
+                SDL_RenderCopyEx(rend, spriteTexture, &srcRect, &destRect, angle, NULL, SDL_FLIP_NONE);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+
             double lastFrameEndTime = 0.0;
 
             double FPS() {
@@ -3707,18 +3797,3 @@ namespace ogf {
     }
 
 }
-/*
-SDL_Texture* Get_Circle(SDL_Color color) {
-    void* pixels;
-    int pitch;
-    SDL_Texture* t;
-
-    if (SDL_LockTexture(t, nullptr, &pixels, &pitch) != 0) {
-        for (int x = 0; x < 100; x++) {
-            for (int y = 0; y < 100; y++) {
-                if (Distance_To(50, 50, x, y) > 50) Set_TexturePixel(t, x, y, color);
-            }
-        }
-    }
-}
-*/
