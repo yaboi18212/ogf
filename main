@@ -2389,8 +2389,57 @@ namespace ogf {
                             _k_right_allowed = false;
 
                             break;
-                        default:
-                            events.push_back(ev);
+                        case SDLK_0:
+                            if (_k_0_allowed) k_0_pressed = true;
+                            k_0_held = true;
+                            _k_0_allowed = false;
+                            break;
+                        case SDLK_1:
+                            if (_k_1_allowed) k_1_pressed = true;
+                            k_1_held = true;
+                            _k_1_allowed = false;
+                            break;
+                        case SDLK_2:
+                            if (_k_2_allowed) k_2_pressed = true;
+                            k_2_held = true;
+                            _k_2_allowed = false;
+                            break;
+                        case SDLK_3:
+                            if (_k_3_allowed) k_3_pressed = true;
+                            k_3_held = true;
+                            _k_3_allowed = false;
+                            break;
+                        case SDLK_4:
+                            if (_k_4_allowed) k_4_pressed = true;
+                            k_4_held = true;
+                            _k_4_allowed = false;
+                            break;
+                        case SDLK_5:
+                            if (_k_5_allowed) k_5_pressed = true;
+                            k_5_held = true;
+                            _k_5_allowed = false;
+                            break;
+                        case SDLK_6:
+                            if (_k_6_allowed) k_6_pressed = true;
+                            k_6_held = true;
+                            _k_6_allowed = false;
+                            break;
+                        case SDLK_7:
+                            if (_k_7_allowed) k_7_pressed = true;
+                            k_7_held = true;
+                            _k_7_allowed = false;
+                            break;
+                        case SDLK_8:
+                            if (_k_8_allowed) k_8_pressed = true;
+                            k_8_held = true;
+                            _k_8_allowed = false;
+                            break;
+                        case SDLK_9:
+                            if (_k_9_allowed) k_9_pressed = true;
+                            k_9_held = true;
+                            _k_9_allowed = false;
+                            break;
+                     
                         }
                     }
                     else if (ev.type == SDL_KEYUP) {
@@ -2702,9 +2751,60 @@ namespace ogf {
                             _k_right_allowed = true;
 
                             break;
+                        case SDLK_0:
+                            k_0_released = true;
+                            k_0_held = false;
+                            _k_0_allowed = true;
+                            break;
+                        case SDLK_1:
+                            k_1_released = true;
+                            k_1_held = false;
+                            _k_1_allowed = true;
+                            break;
+                        case SDLK_2:
+                            k_2_released = true;
+                            k_2_held = false;
+                            _k_2_allowed = true;
+                            break;
+                        case SDLK_3:
+                            k_3_released = true;
+                            k_3_held = false;
+                            _k_3_allowed = true;
+                            break;
+                        case SDLK_4:
+                            k_4_released = true;
+                            k_4_held = false;
+                            _k_4_allowed = true;
+                            break;
+                        case SDLK_5:
+                            k_5_released = true;
+                            k_5_held = false;
+                            _k_5_allowed = true;
+                            break;
+                        case SDLK_6:
+                            k_6_released = true;
+                            k_6_held = false;
+                            _k_6_allowed = true;
+                            break;
+                        case SDLK_7:
+                            k_7_released = true;
+                            k_7_held = false;
+                            _k_7_allowed = true;
+                            break;
+                        case SDLK_8:
+                            k_8_released = true;
+                            k_8_held = false;
+                            _k_8_allowed = true;
+                            break;
+                        case SDLK_9:
+                            k_9_released = true;
+                            k_9_held = false;
+                            _k_9_allowed = true;
+                            break;
                         }
 
                     }
+
                     else events.push_back(ev);
                 }
                 SDL_GetMouseState(&m_x, &m_y);
@@ -4125,8 +4225,57 @@ namespace ogf {
                             _k_right_allowed = false;
 
                             break;
-                        default:
-                            events.push_back(ev);
+                        case SDLK_0:
+                            if (_k_0_allowed) k_0_pressed = true;
+                            k_0_held = true;
+                            _k_0_allowed = false;
+                            break;
+                        case SDLK_1:
+                            if (_k_1_allowed) k_1_pressed = true;
+                            k_1_held = true;
+                            _k_1_allowed = false;
+                            break;
+                        case SDLK_2:
+                            if (_k_2_allowed) k_2_pressed = true;
+                            k_2_held = true;
+                            _k_2_allowed = false;
+                            break;
+                        case SDLK_3:
+                            if (_k_3_allowed) k_3_pressed = true;
+                            k_3_held = true;
+                            _k_3_allowed = false;
+                            break;
+                        case SDLK_4:
+                            if (_k_4_allowed) k_4_pressed = true;
+                            k_4_held = true;
+                            _k_4_allowed = false;
+                            break;
+                        case SDLK_5:
+                            if (_k_5_allowed) k_5_pressed = true;
+                            k_5_held = true;
+                            _k_5_allowed = false;
+                            break;
+                        case SDLK_6:
+                            if (_k_6_allowed) k_6_pressed = true;
+                            k_6_held = true;
+                            _k_6_allowed = false;
+                            break;
+                        case SDLK_7:
+                            if (_k_7_allowed) k_7_pressed = true;
+                            k_7_held = true;
+                            _k_7_allowed = false;
+                            break;
+                        case SDLK_8:
+                            if (_k_8_allowed) k_8_pressed = true;
+                            k_8_held = true;
+                            _k_8_allowed = false;
+                            break;
+                        case SDLK_9:
+                            if (_k_9_allowed) k_9_pressed = true;
+                            k_9_held = true;
+                            _k_9_allowed = false;
+                            break;
+                       
                         }
                     }
                     else if (ev.type == SDL_KEYUP) {
@@ -4436,10 +4585,58 @@ namespace ogf {
                             k_right_released = true;
                             k_right_held = false;
                             _k_right_allowed = true;
-
+                            break;
+                        case SDLK_0:
+                            k_0_released = true;
+                            k_0_held = false;
+                            _k_0_allowed = true;
+                            break;
+                        case SDLK_1:
+                            k_1_released = true;
+                            k_1_held = false;
+                            _k_1_allowed = true;
+                            break;
+                        case SDLK_2:
+                            k_2_released = true;
+                            k_2_held = false;
+                            _k_2_allowed = true;
+                            break;
+                        case SDLK_3:
+                            k_3_released = true;
+                            k_3_held = false;
+                            _k_3_allowed = true;
+                            break;
+                        case SDLK_4:
+                            k_4_released = true;
+                            k_4_held = false;
+                            _k_4_allowed = true;
+                            break;
+                        case SDLK_5:
+                            k_5_released = true;
+                            k_5_held = false;
+                            _k_5_allowed = true;
+                            break;
+                        case SDLK_6:
+                            k_6_released = true;
+                            k_6_held = false;
+                            _k_6_allowed = true;
+                            break;
+                        case SDLK_7:
+                            k_7_released = true;
+                            k_7_held = false;
+                            _k_7_allowed = true;
+                            break;
+                        case SDLK_8:
+                            k_8_released = true;
+                            k_8_held = false;
+                            _k_8_allowed = true;
+                            break;
+                        case SDLK_9:
+                            k_9_released = true;
+                            k_9_held = false;
+                            _k_9_allowed = true;
                             break;
                         }
-
                     }
                     else events.push_back(ev);
                 }
