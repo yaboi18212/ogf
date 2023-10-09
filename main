@@ -5,9 +5,7 @@
 //------------------------
 // SDL
 #include <SDL.h>
-#include <SDL_image.h>
-//#include <SDL_ttf.h>
-//#include <SDL_mixer.h>
+#include <SDL_ttf.h>
 // Box2D
 #include <Box2D.h>
 //math
@@ -22,6 +20,9 @@
 #include <random>
 // time
 #include <chrono>
+// windows.h
+#include <windows.h>
+#pragma comment(lib, "Winmm.lib")
 
 namespace ogf {
     // predefine functions
@@ -90,6 +91,10 @@ namespace ogf {
 #define GAME_LAYER 2
 #define UI_LAYER 3
 
+#define CIRCLE_TYPE 1
+#define RECT_TYPE 2
+#define POLYGON_TYPE 3
+
 
     // pi
 #ifndef M_PI
@@ -100,6 +105,272 @@ namespace ogf {
     //        classes        |
     // -----------------------
 
+    // a button, made for ease of use
+    struct button {
+        int x;
+        int y;
+        int w;
+        int h;
+        bool pressed = false;
+        button(int _x, int _y, int _w, int _h) {
+            x = _x;
+            y = _y;
+            w = _w;
+            h = _h;
+        }
+        void press(int mx, int my, bool clicking) {
+            pressed = (mx > x and mx < x + w and my > y and my < y + h);
+        }
+    };
+    // ease.
+    class Ease {
+    private:
+        double time;
+        double from;
+        double to;
+        int mode;
+        double TimeAtStart;
+
+    public:
+
+        Ease(double atime, double afrom, double ato, int amode) {
+            time = atime;
+            from = afrom;
+            to = ato;
+            mode = amode;
+            reset();
+        }
+        double elapsed;
+        bool done = false;
+
+        double Get_Ease() {
+            elapsed = (SDL_GetTicks() - TimeAtStart) / 1000;
+            if (time <= 0.0) {
+                std::cerr << "Error: Total duration must be greater than zero." << std::endl;
+                return 0.0;
+            }
+
+            // Ensure elapsedTime is within the valid range [0, totalDuration]
+            elapsed = ((elapsed < time ? elapsed : time) < 0.0 ? 0.0 : (elapsed < time ? elapsed : time));
+            if (elapsed == time) done = true;
+
+            // Calculate A as a percentage of elapsed time over total duration
+            double A = (elapsed / time) * 100.0;
+            double B = from;
+            double C = to;
+            int D = mode;
+            switch (D - 1) {
+            case 0:
+                return (((C - B) / 100) * A) + B;
+            case 1:
+                return B + ((SineIn(A)) * (C - B));
+            case 2:
+                return B + (SineOut(A) * (C - B));
+            case 3:
+                return B + ((SineInOut(A)) * (C - B));
+            case 4:
+                return B + (CubicIn(A) * (C - B));
+            case 5:
+                return B + (CubicOut(A) * (C - B));
+            case 6:
+                return B + (CubicInOut(A) * (C - B));
+            case 7:
+                return B + (QuintIn(A) * (C - B));
+            case 8:
+                return B + (QuintOut(A) * (C - B));
+            case 9:
+                return B + (QuintInOut(A) * (C - B));
+            case 10:
+                return B + (CircIn(A) * (C - B));
+            case 11:
+                return B + (CircOut(A) * (C - B));
+            case 12:
+                return B + (CircInOut(A) * (C - B));
+            case 13:
+                return B + (ElasticIn(A) * (C - B));
+            case 14:
+                return B + (ElasticOut(A) * (C - B));
+            case 15:
+                return B + (ElasticInOut(A) * (C - B));
+            case 16:
+                return B + (QuadIn(A) * (C - B));
+            case 17:
+                return B + (QuadOut(A) * (C - B));
+            case 18:
+                return B + (QuadInOut(A) * (C - B));
+            case 19:
+                return B + (QuartIn(A) * (C - B));
+            case 20:
+                return B + (QuartOut(A) * (C - B));
+            case 21:
+                return B + (QuartInOut(A) * (C - B));
+            case 22:
+                return B + (ExpoIn(A) * (C - B));
+            case 23:
+                return B + (ExpoOut(A) * (C - B));
+            case 24:
+                return B + (ExpoInOut(A) * (C - B));
+            case 25:
+                return B + (BackIn(A) * (C - B));
+            case 26:
+                return B + (BackOut(A) * (C - B));
+            case 27:
+                return B + (BackInOut(A) * (C - B));
+            case 28:
+                return B + ((BounceIn(A / 100)) * (C - B));
+            case 29:
+                return B + ((BounceOut(A / 100)) * (C - B));
+            case 30:
+                return B + ((BounceInOut(A / 100)) * (C - B));
+            default:
+                return 0;
+            }
+            // MADE BY JR01
+        }
+        void reset() {
+            TimeAtStart = SDL_GetTicks();
+            done = false;
+        }
+
+    private:
+        //------------------------
+        //        EASES          |
+        //------------------------
+
+        double SineIn(double A) {
+            return 1 - cos((A / 100) * M_PI / 2);
+        }
+        double SineOut(double A) {
+            return std::sin((A / 100) * M_PI / 2);
+        }
+        double SineInOut(double A) {
+            return -(std::cos(M_PI * (A / 100)) - 1) / 2;
+        }
+        double CubicIn(double A) {
+            return std::pow(A / 100, 3);
+        }
+        double CubicOut(double A) {
+            return 1 - std::pow(1 - A / 100, 3);
+        }
+        double CubicInOut(double A) {
+            return (A / 100) < 0.5 ? 4 * std::pow(A / 100, 3) : 1 - std::pow(-2 * (A / 100) + 2, 3) / 2;
+        }
+        double QuintIn(double A) {
+            return std::pow(A / 100, 5);
+        }
+        double QuintOut(double A) {
+            return 1 - std::pow(1 - A / 100, 5);
+        }
+        double QuintInOut(double A) {
+            return (A / 100) < 0.5 ? 16 * std::pow(A / 100, 5) : 1 - std::pow(-2 * (A / 100) + 2, 5) / 2;
+        }
+        double CircIn(double A) {
+            return 1 - std::sqrt(1 - std::pow(A / 100, 2));
+        }
+        double CircOut(double A) {
+            return std::sqrt(1 - std::pow(A / 100 - 1, 2));
+        }
+        double CircInOut(double A) {
+            return (A / 100) < 0.5 ? (1 - std::sqrt(1 - std::pow(2 * (A / 100), 2))) / 2 : (std::sqrt(1 - std::pow(-2 * (A / 100) + 2, 2)) + 1) / 2;
+        }
+        double ElasticIn(double A) {
+            double c4 = (2 * M_PI) / 3;
+            return (A / 100) == 0 ? 0 : (A / 100) == 1 ? 1 : -std::pow(2, 10 * (A / 100) - 10) * std::sin(((A / 100) * 10 - 10.75) * c4);
+        }
+        double ElasticOut(double A) {
+            double c4 = (2 * M_PI) / 3;
+            return (A / 100) == 0 ? 0 : (A / 100) == 1 ? 1 : std::pow(2, -10 * (A / 100)) * std::sin(((A / 100) * 10 - 0.75) * c4) + 1;
+        }
+        double ElasticInOut(double A) {
+            double c5 = (2 * M_PI) / 4.5;
+            return (A / 100) == 0 ? 0 : (A / 100) == 1 ? 1 : (A / 100) < 0.5 ? -(std::pow(2, 20 * (A / 100) - 10) * std::sin((20 * (A / 100) - 11.125) * c5)) / 2 : (std::pow(2, -20 * (A / 100) + 10) * std::sin((20 * (A / 100) - 11.125) * c5)) / 2 + 1;
+        }
+        double QuadIn(double A) {
+            return std::pow(A / 100, 2);
+        }
+        double QuadOut(double A) {
+            return 1 - (1 - A / 100) * (1 - A / 100);
+        }
+        double QuadInOut(double A) {
+            return (A / 100) < 0.5 ? 2 * std::pow(A / 100, 2) : 1 - std::pow(-2 * (A / 100) + 2, 2) / 2;
+        }
+        double QuartIn(double A) {
+            return std::pow(A / 100, 4);
+        }
+        double QuartOut(double A) {
+            return 1 - std::pow(1 - A / 100, 4);
+        }
+        double QuartInOut(double A) {
+            return (A / 100) < 0.5 ? 8 * std::pow(A / 100, 4) : 1 - std::pow(-2 * (A / 100) + 2, 4) / 2;
+        }
+        double ExpoIn(double A) {
+            return (A / 100) == 0 ? 0 : std::pow(2, 10 * (A / 100) - 10);
+        }
+        double ExpoOut(double A) {
+            return (A / 100) == 1 ? 1 : 1 - std::pow(2, -10 * (A / 100));
+        }
+        double ExpoInOut(double A) {
+            return (A / 100) == 0 ? 0 : (A / 100) == 1 ? 1 : (A / 100) < 0.5 ? std::pow(2, 20 * (A / 100) - 10) / 2 : (2 - std::pow(2, -20 * (A / 100) + 10)) / 2;
+        }
+        double BackIn(double A) {
+            double c1 = 1.70158;
+            double c3 = c1 + 1;
+            return c3 * std::pow(A / 100, 3) - c1 * std::pow(A / 100, 2);
+        }
+        double BackOut(double A) {
+            double c1 = 1.70158;
+            double c3 = c1 + 1;
+            return 1 + c3 * std::pow(A / 100 - 1, 3) + c1 * std::pow(A / 100 - 1, 2);
+        }
+        double BackInOut(double A) {
+            double c1 = 1.70158;
+            double c2 = c1 * 1.525;
+            return (A / 100) < 0.5 ? (std::pow(2 * (A / 100), 2) * ((c2 + 1) * 2 * (A / 100) - c2)) / 2 : (std::pow(2 * (A / 100) - 2, 2) * ((c2 + 1) * ((A / 100) * 2 - 2) + c2) + 2) / 2;
+        }
+        double BounceOut(double A) {
+            double n1 = 7.5625;
+            double d1 = 2.75;
+            if (A < 1 / d1) {
+                return n1 * A * A;
+            }
+            else if (A < 2 / d1) {
+                return n1 * (A -= 1.5 / d1) * A + 0.75;
+            }
+            else if (A < 2.5 / d1) {
+                return n1 * (A -= 2.25 / d1) * A + 0.9375;
+            }
+            else {
+                return n1 * (A -= 2.625 / d1) * A + 0.984375;
+            }
+        }
+        double BounceIn(double A) {
+            return 1 - BounceOut(1 - A);
+        }
+        double BounceInOut(double A) {
+            return A < 0.5 ? (1 - BounceOut(1 - 2 * A)) / 2 : (1 + BounceOut(2 * A - 1)) / 2;
+        }
+    };
+    // a timer, based on real time. 
+    class Timer {
+
+    private:
+        std::chrono::high_resolution_clock::time_point startTime;
+
+    public:
+        Timer() {
+            Reset();
+        }
+
+        void Reset() {
+            startTime = std::chrono::high_resolution_clock::now();
+        }
+
+        double Get_Time() const {
+            auto currentTime = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double> elapsedTime = currentTime - startTime;
+            return elapsedTime.count();
+        }
+    };
     struct _sprite {
 
         SDL_Rect dst;
@@ -107,6 +378,7 @@ namespace ogf {
         int gameLayer;
         int x, y, w, h;
         double angle;
+        SDL_RendererFlip flip = SDL_FLIP_NONE;
         int displayOrder = 99999;
         _sprite(int X, int Y, int W, int H, double Angle, std::string sprite, SDL_Rect dest, int gamel) {
             spr = sprite;
@@ -119,9 +391,43 @@ namespace ogf {
             dst = dest;
         }
     };
+    struct animation {
+        std::string file = "NULL";
+        int rowCount = 1;
+        int coloumnCount = 1;
+        int frameCount = 1;
+        int sheetW = 1;
+        int sheetH = 1;
+        double duration;
+        animation(std::string f, int rC, int cC, int _sheetW, int _sheetH, double dur) {
+            file = f;
+            rowCount = rC;
+            coloumnCount = cC;
+            sheetW = _sheetW;
+            sheetH = _sheetH;
+            duration = dur;
+            frameCount = rowCount * coloumnCount;
+        }
+        int currentFrame = 0;
+        double elapsedTime = 0;
+    };
+    struct camera {
+        int x = 0;
+        int y = 0;
+        int wW = 1;
+        int wH = 1;
+        double zoom = 100;
+        camera() {}
+        camera(int X, int Y, int WW, int WH) {
+            x = X;
+            y = Y;
+            wW = WW;
+            wH = WH;
+        }
+    };
 
     namespace Physics {
-
+    
         struct type {
         public:
             type() {}
@@ -141,22 +447,6 @@ namespace ogf {
             double mass = 40;
             std::vector <b2Vec2> points;
         };
-
-        struct camera {
-            int x = 0;
-            int y = 0;
-            int wW = 1;
-            int wH = 1;
-            double zoom = 100;
-            camera();
-            camera(int X, int Y, int WW, int WH) {
-                x = X;
-                y = Y;
-                wW = WW;
-                wH = WH;
-            }
-        };
-
         struct _rc {
 
             _rc() {}
@@ -230,7 +520,6 @@ namespace ogf {
                 return hit;
             }
         };
-
         struct emmit {
             bool isEmmited = false;
             double angle = 0;
@@ -241,7 +530,6 @@ namespace ogf {
             bool rotate = true;
             b2Body* from;
         };
-
         struct raycast {
             std::vector<type*> typesHit;
             bool hit = false;
@@ -252,7 +540,6 @@ namespace ogf {
             double length = 0;
             double angle = 0;
         };
-
         struct attach {
             bool isAttached = false;
             b2Body* from;
@@ -260,30 +547,9 @@ namespace ogf {
             double offsetY = 0;
             bool match_angle = false;
         };
-
+        
         class Obj {
         public:
-            // Member Variables
-            type* Type = nullptr;
-            std::string sprite;
-            int collisions_type = 0;
-            bool DoGravity = true;
-            bool DoRotation = false;
-
-            double w = 1;
-            double h = 1;
-            float mass = 10;
-            double xVel = 0;
-            double yVel = 0;
-            int DisplayOrder = 99999;
-
-            std::unordered_map<b2Body*, bool> col_body;
-            std::unordered_map<type*, bool> col_type;
-
-            // Box2D Physics Members
-            b2Body* body = nullptr;
-            b2PolygonShape shape;
-            SDL_Renderer* rend = nullptr;
 
             // Constructors and Initialization
             Obj() {
@@ -294,19 +560,19 @@ namespace ogf {
                     h = t->h - 1,
                     b_type = t->b_type,
                     mass = t->mass,
-                    collisions_type = t->c_type,
+                    c_type = t->c_type,
                     smass = mass,
                     Type = t,
                     sprite = t->spr;
 
-                switch (collisions_type) {
-                case 1:
+                switch (c_type) {
+                case CIRCLE_TYPE:
                     Define_Circle(_x, _y, w / 2, (M_PI * w * w) / mass, b_type);
                     break;
-                case 2:
+                case RECT_TYPE:
                     Define_Box(_x, _y, w, h, w * h / mass, b_type);
                     break;
-                case 3:
+                case POLYGON_TYPE:
                     Define_Polygon(_x, _y, t->points, w * h / mass, b_type);
                 }
                 Set_Pos(_x, _y);
@@ -323,6 +589,33 @@ namespace ogf {
                     if (att.match_angle) Set_Angle(body->GetAngle() * (180 / M_PI));
                 }
             }
+
+            // Member Variables
+            type* Type = nullptr;
+            int c_type = 0;
+            bool DoGravity = true;
+            bool DoRotation = false;
+            bool SleepWhenOutOfView = true;
+            int ViewBufferPixels = 100;
+
+            double w = 1;
+            double h = 1;
+            float mass = 10;
+            double xVel = 0;
+            double yVel = 0;
+            int DisplayOrder = 99999;
+            SDL_RendererFlip flip = SDL_FLIP_NONE;
+
+            std::unordered_map<b2Body*, bool> col_body;
+            std::unordered_map<type*, bool> col_type;
+
+            // Box2D Physics Members
+            b2Body* body = nullptr;
+            SDL_Renderer* rend = nullptr;
+
+            // animations and drawing
+            std::string sprite = "NULL";
+            animation* anim = nullptr;
 
             // Getter for Angle
             double Get_Angle() {
@@ -565,17 +858,6 @@ namespace ogf {
                 body = nullptr;
             }
 
-            std::vector<b2Vec2> Get_Shadow(Obj* to) {
-                std::vector<b2Vec2> points = to->Get_Shape_Points();
-                std::vector<b2Vec2> out;
-                for (b2Vec2 i : points) {
-                    double dist = Distance_To(Get_Pos().x, Get_Pos().y, i.x, i.y);
-                    double angle = Angle_To(Get_Pos().x, Get_Pos().y, i.x, i.y);
-                    out.push_back(AngleAndDistance_To(body->GetWorldCenter().x * 32, body->GetWorldCenter().y * -32, dist, angle));
-                }
-                return out;
-            }
-
             attach att;
             emmit em;
 
@@ -619,7 +901,6 @@ namespace ogf {
                 b2PolygonShape Dshape;
                 Dshape.SetAsBox(_W / 64, _H / 64);
                 fxtdef.shape = &Dshape;
-                shape = Dshape;
                 fxtdef.density = dens;
                 body->CreateFixture(&fxtdef);
             }
@@ -639,7 +920,6 @@ namespace ogf {
                 
                 Dshape.Set(points.data(), points.size());
                 fxtdef.shape = &Dshape;
-                shape = Dshape;
                 fxtdef.density = dens;
                 if (body == nullptr) std::cout << "dead";
                 body->CreateFixture(&fxtdef);
@@ -701,7 +981,7 @@ namespace ogf {
                     SDL_Quit();
                     return;
                 }
-
+                TTF_Init();
                 b2Vec2 grav = b2Vec2(0, 9.81 * -1);
                 world = new b2World(grav);
 
@@ -1007,13 +1287,12 @@ namespace ogf {
                 
                 // draw bodies
                 for (b2Body* i = world->GetBodyList(); i; i = i->GetNext()) {
-
-
                     Obj* o = static_cast<Obj*> (i->GetUserData());
                     if (!paused) o->Update();
-
+                    if (o->SleepWhenOutOfView) if (inView(o, o->ViewBufferPixels)) o->body->SetAwake(false);
                     if (o->sprite != "NULL" && o->body != nullptr) {
-                        Draw_Sprite(ceil(o->Get_Pos().x), ceil(o->Get_Pos().y), o->w, o->h, o->Get_Angle() * (180 / M_PI), o->sprite, o->DisplayOrder);
+                        if (o->anim == nullptr) Draw_Sprite(ceil(o->Get_Pos().x), ceil(o->Get_Pos().y), o->w, o->h, o->Get_Angle() * (180 / M_PI), o->sprite, o->DisplayOrder, GAME_LAYER, o->flip);
+                        else Draw_Animation(ceil(o->Get_Pos().x), ceil(o->Get_Pos().y), o->w, o->h, o->Get_Angle() * (180 / M_PI), o->anim, o->DisplayOrder, GAME_LAYER, o->flip);
                     }
                     if (Draw_hitboxes) Draw_Hitbox(o);
                 }
@@ -1037,15 +1316,15 @@ namespace ogf {
                 // draw sprites and bodies
                 for (int i = 0; i < sprites.size(); i++) {
                     _sprite s = sprites[i];
-                    if (s.gameLayer == UI_LAYER) _Draw_Sprite(s.x, s.y, s.w, s.h, s.angle * (-1), s.spr);
+                    if (s.gameLayer == UI_LAYER) _Draw_Sprite(s.x, s.y, s.w, s.h, s.angle * (-1), s.spr, s.dst, s.flip);
                 }
                 for (int i = 0; i < sprites.size(); i++) {
                     _sprite s = sprites[i];
-                    if (s.gameLayer == GAME_LAYER) _Draw_Sprite(s.x, s.y, s.w, s.h, s.angle * (-1), s.spr);
+                    if (s.gameLayer == GAME_LAYER) _Draw_Sprite(s.x, s.y, s.w, s.h, s.angle * (-1), s.spr, s.dst, s.flip);
                 }
                 for (int i = 0; i < sprites.size(); i++) {
                     _sprite s = sprites[i];
-                    if (s.gameLayer == UI_LAYER) _Draw_Sprite(s.x, s.y, s.w, s.h, s.angle * (-1), s.spr);
+                    if (s.gameLayer == UI_LAYER) _Draw_Sprite(s.x, s.y, s.w, s.h, s.angle * (-1), s.spr, s.dst, s.flip);
                 }
 
                 // update the window
@@ -1057,6 +1336,10 @@ namespace ogf {
                     Clear();
                 }
                 sprites = {};
+                if (!running) {
+                    SDL_DestroyWindow(win);
+                    SDL_DestroyRenderer(rend);
+                }
                 return running;
             }
 
@@ -1064,7 +1347,7 @@ namespace ogf {
             bool fullscreen = false;
 
             // display fps on the window
-            bool display_FPS = true;
+            bool display_FPS = false;
 
             // fps as a variable
             int fps = 0;
@@ -1093,10 +1376,6 @@ namespace ogf {
                 SDL_SetWindowIcon(win, s);
             }
 
-            
-            // size multiplier
-            int size_m = 100;
-
             //--------------------------
             //         PHYSICS         |
             //--------------------------
@@ -1110,6 +1389,12 @@ namespace ogf {
             // set the game gravity
             void Set_Gravity(float32 hor, float32 vert) {
                 world->SetGravity({ hor, vert * (-1) });
+            }
+
+            bool inView(Obj* o, int viewBufferPixels = 0) {
+                for (b2Vec2 i : o->Get_Shape_Points()) {
+                    return (i.x > W + viewBufferPixels || i.x < 0 - viewBufferPixels || i.y > H + viewBufferPixels || i.y < 0 - viewBufferPixels);
+                }
             }
 
             // spawn an object. arguments:
@@ -1128,7 +1413,7 @@ namespace ogf {
             Obj* Emmit(Obj* from, type* t, double force, double angle, double maxDist = 0, bool rotate = true, bool allowSlowDown = true) {
 
                 b2Vec2 pos;
-                double dist = std::max(from->w, from->h) + std::max(t->w, t->h) + 5;
+                double dist = max(from->w, from->h) + max(t->w, t->h) + 5;
                 pos = AngleAndDistance_To(from->body->GetWorldCenter().x * 32, from->body->GetWorldCenter().y * -32, angle, dist);
 
                 Obj* object = new Obj(t, world, pos.x, pos.y);
@@ -1203,13 +1488,14 @@ namespace ogf {
                 if (sorcrect.x == 10 && sorcrect.y == 10 && sorcrect.w == 9 && sorcrect.h == 9) sorcrect = { 0,0,W,H };
                 SDL_RenderCopyEx(rend, t, &src, &sorcrect, angle, NULL, SDL_FLIP_NONE);
             }
-            void Draw_Sprite(int x, int y, int width, int height, double angle, std::string file, int DisplayOrder = 99999, int layer = GAME_LAYER, SDL_Rect sorcrect = { 10,10,9,9 }) {
+            void Draw_Sprite(int x, int y, int width, int height, double angle, std::string file, int DisplayOrder = 99999, int layer = GAME_LAYER, SDL_RendererFlip flip = SDL_FLIP_NONE, SDL_Rect sorcrect = { 10,10,9,9 }) {
                 if (layer == GAME_LAYER) {
                     x -= cam.x;
                     y -= cam.y;
                 }
                 SDL_Texture* spriteTexture = SDL_CreateTextureFromSurface(rend, SDL_LoadBMP(file.c_str()));
                 _sprite s = { x,y,width,height,angle,file,sorcrect,layer };
+                s.flip = flip;
                 s.displayOrder = DisplayOrder;
                 sprites.push_back(s);
             }
@@ -1390,7 +1676,7 @@ namespace ogf {
 
             // draw an Obj hitBox
             void Draw_Hitbox(Obj* o) {
-                switch (o->collisions_type) {
+                switch (o->c_type) {
                 case 1:
                     Draw_Circle(o->Get_Pos().x + o->w / 2, o->Get_Pos().y + o->w / 2, o->w, WHITE);
                     break;
@@ -1406,6 +1692,106 @@ namespace ogf {
                     Draw_Polygon(points, WHITE, o->Get_Pos().x + o->w / 2, o->Get_Pos().y + o->h / 2);
                     break;
                 }
+            }
+
+            // draw text on the screen. you must have a font downloaded
+            void Draw_String(int x, int y, int size, double angle, std::string text, std::string f, SDL_Color color) {
+                TTF_Font* font = TTF_OpenFont(f.c_str(), size);
+                if (!rend || !font) {
+                    std::cerr << "Renderer or font is invalid." << std::endl;
+                    return;
+                }
+
+                // Create a transformation matrix for rotating the text
+                SDL_Point center = { x, y };
+                SDL_Rect textRect = { 0, 0, 0, 0 };
+                SDL_Surface* textSurface = nullptr;
+                SDL_Texture* textTexture = nullptr;
+
+                // Rotate the text
+                if (angle != 0.0) {
+                    SDL_Surface* tempSurface = TTF_RenderText_Solid(font, text.c_str(), color);
+                    if (!tempSurface) {
+                        std::cerr << "Text rendering failed: " << TTF_GetError() << std::endl;
+                        return;
+                    }
+
+                    SDL_Texture* tempTexture = SDL_CreateTextureFromSurface(rend, tempSurface);
+                    SDL_FreeSurface(tempSurface);
+                    if (!tempTexture) {
+                        std::cerr << "Texture creation failed: " << SDL_GetError() << std::endl;
+                        return;
+                    }
+
+                    SDL_QueryTexture(tempTexture, nullptr, nullptr, &textRect.w, &textRect.h);
+
+                    SDL_SetRenderTarget(rend, nullptr);
+                    
+                    SDL_RenderCopyEx(rend, tempTexture, nullptr, &textRect, angle, &center, SDL_FLIP_NONE);
+
+                    SDL_DestroyTexture(tempTexture);
+                }
+                else {
+                    textSurface = TTF_RenderText_Solid(font, text.c_str(), color);
+                    if (!textSurface) {
+                        std::cerr << "Text rendering failed: " << TTF_GetError() << std::endl;
+                        return;
+                    }
+
+                    textTexture = SDL_CreateTextureFromSurface(rend, textSurface);
+                    if (!textTexture) {
+                        std::cerr << "Texture creation failed: " << SDL_GetError() << std::endl;
+                        return;
+                    }
+
+                    SDL_QueryTexture(textTexture, nullptr, nullptr, &textRect.w, &textRect.h);
+                }
+
+                textRect.x = x;
+                textRect.y = y;
+                textRect.w = int(size * textRect.w / textRect.h);
+                textRect.h = size;
+
+                SDL_RenderCopyEx(rend, textTexture, nullptr, &textRect, angle, &center, SDL_FLIP_NONE);
+
+                SDL_DestroyTexture(textTexture);
+                SDL_FreeSurface(textSurface);
+            }
+
+            // draw a sprite sheet animation
+            void Draw_Animation(int x, int y,int w, int h, double angle, animation* an, int displayOrder = 99999, int layer = GAME_LAYER, SDL_RendererFlip flip = SDL_FLIP_NONE) {
+                double frameDuration = an->duration / an->frameCount;
+                an->elapsedTime += dt;
+                int NextFrame = an->currentFrame + 1;
+                std::cout << "current frame: " << an->currentFrame <<"\n";
+
+                Draw_Frame(an->currentFrame, x, y, w, h, angle, an, displayOrder, layer, flip);
+
+                if (an->elapsedTime >= frameDuration * NextFrame) an->currentFrame++;
+                if (an->elapsedTime >= an->duration) {
+                    an->currentFrame = 0;
+                    an->elapsedTime = 0;
+                }
+
+            }
+            void Draw_Frame(int frameIndex, int x, int y, int w, int h, double angle, animation* an, int displayOrder = 99999, int game_layer = GAME_LAYER, SDL_RendererFlip flip = SDL_FLIP_NONE) {
+                if (frameIndex >= an->frameCount) return;
+
+                int frameWidth = an->sheetW / an->coloumnCount;
+                int frameHeight = an->sheetH / an->rowCount;
+
+                // Calculate the position of the frame on the sprite sheet based on frameIndex
+                int frameX = (frameIndex % an->coloumnCount) * frameWidth;
+                int frameY = (frameIndex / an->coloumnCount) * frameHeight;
+
+                // Calculate the scaled frame width and height based on w and h arguments
+                int scaledFrameWidth = w;
+                int scaledFrameHeight = h;
+
+                SDL_Rect r = { frameX, frameY, frameWidth, frameHeight };
+
+                // Call Draw_Sprite to draw the frame from the sprite sheet with the specified w and h
+                Draw_Sprite(x, y, scaledFrameWidth, scaledFrameHeight, angle, an->file, displayOrder, game_layer, flip, r);
             }
 
             //---------------------------
@@ -2331,10 +2717,10 @@ namespace ogf {
 
             SDL_Rect Merge_Rectangles(const SDL_Rect& rect1, const SDL_Rect& rect2) {
                 SDL_Rect mergedRect;
-                mergedRect.x = std::min(rect1.x, rect2.x);
-                mergedRect.y = std::min(rect1.y, rect2.y);
-                mergedRect.w = std::max(rect1.x + rect1.w, rect2.x + rect2.w) - mergedRect.x;
-                mergedRect.h = std::max(rect1.y + rect1.h, rect2.y + rect2.h) - mergedRect.y;
+                mergedRect.x = min(rect1.x, rect2.x);
+                mergedRect.y = min(rect1.y, rect2.y);
+                mergedRect.w = max(rect1.x + rect1.w, rect2.x + rect2.w) - mergedRect.x;
+                mergedRect.h = max(rect1.y + rect1.h, rect2.y + rect2.h) - mergedRect.y;
                 return mergedRect;
             }
 
@@ -2360,7 +2746,7 @@ namespace ogf {
                 lastFrameEndTime = SDL_GetTicks() / 1000.0;
             }
 
-            void _Draw_Sprite(int x, int y, int width, int height, double angle, std::string file, SDL_Rect sorcrect = { 10,10,9,9 }) {
+            void _Draw_Sprite(int x, int y, int width, int height, double angle, std::string file, SDL_Rect sorcrect = { 10,10,9,9 }, SDL_RendererFlip flip = SDL_FLIP_NONE) {
 
                 SDL_Texture* spriteTexture = SDL_CreateTextureFromSurface(rend, SDL_LoadBMP(file.c_str()));
                 SDL_Rect srcRect = { 0, 0, width, height };
@@ -2372,14 +2758,13 @@ namespace ogf {
                     SDL_Log("Unable to load sprite texture: %s", SDL_GetError());
                 }
 
-                SDL_RenderCopyEx(rend, spriteTexture, &srcRect, &destRect, angle, NULL, SDL_FLIP_NONE);
+                SDL_RenderCopyEx(rend, spriteTexture, &srcRect, &destRect, angle, NULL, flip);
                 // Optionally use 'layer' argument for layer-specific logic
             }
 
             bool CompareSprites( _sprite* sprite1, _sprite* sprite2) {
                 return sprite1->displayOrder > sprite2->displayOrder;
             }
-
             void SortSprites() {
                 std::sort(sprites.begin(), sprites.end(), [](const _sprite& a, const _sprite& b) {
                     return a.displayOrder > b.displayOrder;
@@ -2414,274 +2799,1742 @@ namespace ogf {
 
         };
     }
-    // a button, made for ease of use
-    struct button {
-        int x;
-        int y;
-        int w;
-        int h;
-        std::string file;
-        bool pressed = false;
-        button(int _x, int _y, int _w, int _h, std::string _file = "") {
-            x = _x;
-            y = _y;
-            w = _w;
-            h = _h;
-            file = _file;
+    namespace No_Physics {
+        class Window {
+        public:
 
-        }
-        void press(int mx, int my, bool clicking) {
-            pressed = (mx > x and mx < x + w and my > y and my < y + h);
-        }
-    };
-    // ease.
-    class Ease {
-    private:
-        double time;
-        double from;
-        double to;
-        int mode;
-        double TimeAtStart;
+            bool operator== (Window o) {
+                return win == win;
+            }
+            // the window itself,for sdl functions
+            SDL_Window* win = nullptr;
+            // window dimensions
+            int W = 2, H = 2;
+            // window display name
+            std::string name = "window";
+            // the window renderer, for sdl functions
+            SDL_Renderer* rend = nullptr;
+            // the window events
 
-    public:
+            // arguements: name,width,height,resizable (bool)
+            Window(std::string _name, int _W, int _H, bool resizable) {
+                if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
+                    SDL_Log("Unable to initialize SDL: %s", SDL_GetError());
+                    return;
+                }
+                win = SDL_CreateWindow(_name.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, _W, _H, (resizable == true ? SDL_WINDOW_RESIZABLE : SDL_WINDOW_SHOWN));
+                name = _name;
+                if (!win) {
+                    SDL_Log("Failed to create window: %s", SDL_GetError());
+                    SDL_Quit();
+                    return;
+                }
+                TTF_Init();
+                
+                rend = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
 
-        Ease(double atime, double afrom, double ato, int amode) {
-            time = atime;
-            from = afrom;
-            to = ato;
-            mode = amode;
-            reset();
-        }
-        double elapsed;
-        bool done = false;
+                if (!rend) {
+                    SDL_Log("Failed to create renderer: %s", SDL_GetError());
+                    SDL_DestroyWindow(win);
+                    SDL_Quit();
+                    return;
+                }
+                W = _W;
+                H = _H;
+                cam.wW = W;
+                cam.wH = H;
 
-        double Get_Ease() {
-            elapsed = (SDL_GetTicks() - TimeAtStart) / 1000;
-            if (time <= 0.0) {
-                std::cerr << "Error: Total duration must be greater than zero." << std::endl;
-                return 0.0;
             }
 
-            // Ensure elapsedTime is within the valid range [0, totalDuration]
-            elapsed = ((elapsed < time ? elapsed : time) < 0.0 ? 0.0 : (elapsed < time ? elapsed : time));
-            if (elapsed == time) done = true;
+            //--------------------
+            //       KEYS        |
+            //--------------------
 
-            // Calculate A as a percentage of elapsed time over total duration
-            double A = (elapsed / time) * 100.0;
-            double B = from;
-            double C = to;
-            int D = mode;
-            switch (D - 1) {
-            case 0:
-                return (((C - B) / 100) * A) + B;
-            case 1:
-                return B + ((SineIn(A)) * (C - B));
-            case 2:
-                return B + (SineOut(A) * (C - B));
-            case 3:
-                return B + ((SineInOut(A)) * (C - B));
-            case 4:
-                return B + (CubicIn(A) * (C - B));
-            case 5:
-                return B + (CubicOut(A) * (C - B));
-            case 6:
-                return B + (CubicInOut(A) * (C - B));
-            case 7:
-                return B + (QuintIn(A) * (C - B));
-            case 8:
-                return B + (QuintOut(A) * (C - B));
-            case 9:
-                return B + (QuintInOut(A) * (C - B));
-            case 10:
-                return B + (CircIn(A) * (C - B));
-            case 11:
-                return B + (CircOut(A) * (C - B));
-            case 12:
-                return B + (CircInOut(A) * (C - B));
-            case 13:
-                return B + (ElasticIn(A) * (C - B));
-            case 14:
-                return B + (ElasticOut(A) * (C - B));
-            case 15:
-                return B + (ElasticInOut(A) * (C - B));
-            case 16:
-                return B + (QuadIn(A) * (C - B));
-            case 17:
-                return B + (QuadOut(A) * (C - B));
-            case 18:
-                return B + (QuadInOut(A) * (C - B));
-            case 19:
-                return B + (QuartIn(A) * (C - B));
-            case 20:
-                return B + (QuartOut(A) * (C - B));
-            case 21:
-                return B + (QuartInOut(A) * (C - B));
-            case 22:
-                return B + (ExpoIn(A) * (C - B));
-            case 23:
-                return B + (ExpoOut(A) * (C - B));
-            case 24:
-                return B + (ExpoInOut(A) * (C - B));
-            case 25:
-                return B + (BackIn(A) * (C - B));
-            case 26:
-                return B + (BackOut(A) * (C - B));
-            case 27:
-                return B + (BackInOut(A) * (C - B));
-            case 28:
-                return B + ((BounceIn(A / 100)) * (C - B));
-            case 29:
-                return B + ((BounceOut(A / 100)) * (C - B));
-            case 30:
-                return B + ((BounceInOut(A / 100)) * (C - B));
-            default:
-                return 0;
+            bool k_a_pressed = false;
+            bool k_a_held = false;
+            bool k_a_released = false;
+
+            bool k_b_pressed = false;
+            bool k_b_held = false;
+            bool k_b_released = false;
+
+            bool k_c_pressed = false;
+            bool k_c_held = false;
+            bool k_c_released = false;
+
+            bool k_d_pressed = false;
+            bool k_d_held = false;
+            bool k_d_released = false;
+
+            bool k_e_pressed = false;
+            bool k_e_held = false;
+            bool k_e_released = false;
+
+            bool k_f_pressed = false;
+            bool k_f_held = false;
+            bool k_f_released = false;
+
+            bool k_g_pressed = false;
+            bool k_g_held = false;
+            bool k_g_released = false;
+
+            bool k_h_pressed = false;
+            bool k_h_held = false;
+            bool k_h_released = false;
+
+            bool k_i_pressed = false;
+            bool k_i_held = false;
+            bool k_i_released = false;
+
+            bool k_j_pressed = false;
+            bool k_j_held = false;
+            bool k_j_released = false;
+
+            bool k_k_pressed = false;
+            bool k_k_held = false;
+            bool k_k_released = false;
+
+            bool k_l_pressed = false;
+            bool k_l_held = false;
+            bool k_l_released = false;
+
+            bool k_m_pressed = false;
+            bool k_m_held = false;
+            bool k_m_released = false;
+
+            bool k_n_pressed = false;
+            bool k_n_held = false;
+            bool k_n_released = false;
+
+            bool k_o_pressed = false;
+            bool k_o_held = false;
+            bool k_o_released = false;
+
+            bool k_p_pressed = false;
+            bool k_p_held = false;
+            bool k_p_released = false;
+
+            bool k_q_pressed = false;
+            bool k_q_held = false;
+            bool k_q_released = false;
+
+            bool k_r_pressed = false;
+            bool k_r_held = false;
+            bool k_r_released = false;
+
+            bool k_s_pressed = false;
+            bool k_s_held = false;
+            bool k_s_released = false;
+
+            bool k_t_pressed = false;
+            bool k_t_held = false;
+            bool k_t_released = false;
+
+            bool k_u_pressed = false;
+            bool k_u_held = false;
+            bool k_u_released = false;
+
+            bool k_v_pressed = false;
+            bool k_v_held = false;
+            bool k_v_released = false;
+
+            bool k_w_pressed = false;
+            bool k_w_held = false;
+            bool k_w_released = false;
+
+            bool k_x_pressed = false;
+            bool k_x_held = false;
+            bool k_x_released = false;
+
+            bool k_y_pressed = false;
+            bool k_y_held = false;
+            bool k_y_released = false;
+
+            bool k_z_pressed = false;
+            bool k_z_held = false;
+            bool k_z_released = false;
+
+            // Additional commonly used keys
+            bool k_space_pressed = false;
+            bool k_space_held = false;
+            bool k_space_released = false;
+
+            bool k_enter_pressed = false;
+            bool k_enter_held = false;
+            bool k_enter_released = false;
+
+            bool k_escape_pressed = false;
+            bool k_escape_held = false;
+            bool k_escape_released = false;
+
+            bool k_shift_pressed = false;
+            bool k_shift_held = false;
+            bool k_shift_released = false;
+
+            bool k_ctrl_pressed = false;
+            bool k_ctrl_held = false;
+            bool k_ctrl_released = false;
+
+            bool k_alt_pressed = false;
+            bool k_alt_held = false;
+            bool k_alt_released = false;
+
+            // Special characters
+            bool k_semicolon_pressed = false;
+            bool k_semicolon_held = false;
+            bool k_semicolon_released = false;
+
+            bool k_apostrophe_pressed = false;
+            bool k_apostrophe_held = false;
+            bool k_apostrophe_released = false;
+
+            bool k_period_pressed = false;
+            bool k_period_held = false;
+            bool k_period_released = false;
+
+            bool k_comma_pressed = false;
+            bool k_comma_held = false;
+            bool k_comma_released = false;
+
+            bool k_slash_pressed = false;
+            bool k_slash_held = false;
+            bool k_slash_released = false;
+
+            bool k_backslash_pressed = false;
+            bool k_backslash_held = false;
+            bool k_backslash_released = false;
+
+            bool k_asterisk_pressed = false;
+            bool k_asterisk_held = false;
+            bool k_asterisk_released = false;
+
+            bool k_equals_pressed = false;
+            bool k_equals_held = false;
+            bool k_equals_released = false;
+
+            bool k_minus_pressed = false;
+            bool k_minus_held = false;
+            bool k_minus_released = false;
+
+            // Number keys (0-9)
+            bool k_0_pressed = false;
+            bool k_0_held = false;
+            bool k_0_released = false;
+
+            bool k_1_pressed = false;
+            bool k_1_held = false;
+            bool k_1_released = false;
+
+            bool k_2_pressed = false;
+            bool k_2_held = false;
+            bool k_2_released = false;
+
+            bool k_3_pressed = false;
+            bool k_3_held = false;
+            bool k_3_released = false;
+
+            bool k_4_pressed = false;
+            bool k_4_held = false;
+            bool k_4_released = false;
+
+            bool k_5_pressed = false;
+            bool k_5_held = false;
+            bool k_5_released = false;
+
+            bool k_6_pressed = false;
+            bool k_6_held = false;
+            bool k_6_released = false;
+
+            bool k_7_pressed = false;
+            bool k_7_held = false;
+            bool k_7_released = false;
+
+            bool k_8_pressed = false;
+            bool k_8_held = false;
+            bool k_8_released = false;
+
+            bool k_9_pressed = false;
+            bool k_9_held = false;
+            bool k_9_released = false;
+
+            // Arrow keys
+            bool k_up_pressed = false;
+            bool k_up_held = false;
+            bool k_up_released = false;
+
+            bool k_down_pressed = false;
+            bool k_down_held = false;
+            bool k_down_released = false;
+
+            bool k_left_pressed = false;
+            bool k_left_held = false;
+            bool k_left_released = false;
+
+            bool k_right_pressed = false;
+            bool k_right_held = false;
+            bool k_right_released = false;
+
+            // the window mouse events
+            bool m_left_pressed = false;
+            bool m_left_held = false;
+            bool m_left_released = false;
+            bool m_right_pressed = false;
+            bool m_right_held = false;
+            bool m_right_released = false;
+            int m_x = 0;
+            int m_y = 0;
+            int m_wheel_x = 0;
+            int m_wheel_y = 0;
+            bool m_lock = false;
+            bool m_show = true;
+
+            //----------------------------
+            //           GENERAL         |
+            //----------------------------
+
+            // this is the most important function in this entire class.
+            // add it to your while loop argument, and it will update the window,
+            // and if you are using physics it will also update that.
+
+            bool Update() {
+                // events
+                Get_Events();
+                // delta time
+                dt = Get_DT();
+
+                // fps cap
+                Cap_FPS((max_FPS == 0 ? 2000 : max_FPS));
+
+                // mouse lock
+                if (m_lock) {
+                    SDL_SetRelativeMouseMode(SDL_TRUE);
+                    SDL_GetRelativeMouseState(&m_x, &m_y);
+                }
+                else {
+                    SDL_SetRelativeMouseMode(SDL_FALSE);
+                }
+
+                // zoom
+                double z = cam.zoom / 100;
+                SDL_RenderSetScale(rend, z, z);
+
+                // window size
+                SDL_GetWindowSize(win, &W, &H);
+
+                // fullscreen
+                if (fullscreen) {
+                    SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN);
+                    if (k_escape_pressed) fullscreen = false;
+                }
+                else {
+                    SDL_SetWindowFullscreen(win, 0);
+                }
+                SDL_ShowCursor(m_show);
+
+                // mouse pos
+                if (!m_lock) SDL_GetMouseState(&m_x, &m_y);
+
+                // get fps
+                fps = FPS();
+
+                // window title
+                std::string new_name = (!display_FPS ? name : name + "    fps: " + std::to_string(fps));
+                SDL_SetWindowTitle(win, new_name.c_str());
+
+                // sort the sprites based on a display order
+                SortSprites();
+
+                // draw sprites and bodies
+                for (int i = 0; i < sprites.size(); i++) {
+                    _sprite s = sprites[i];
+                    if (s.gameLayer == UI_LAYER) _Draw_Sprite(s.x, s.y, s.w, s.h, s.angle * (-1), s.spr, s.dst, s.flip);
+                }
+                for (int i = 0; i < sprites.size(); i++) {
+                    _sprite s = sprites[i];
+                    if (s.gameLayer == GAME_LAYER) _Draw_Sprite(s.x, s.y, s.w, s.h, s.angle * (-1), s.spr, s.dst, s.flip);
+                }
+                for (int i = 0; i < sprites.size(); i++) {
+                    _sprite s = sprites[i];
+                    if (s.gameLayer == UI_LAYER) _Draw_Sprite(s.x, s.y, s.w, s.h, s.angle * (-1), s.spr, s.dst, s.flip);
+                }
+
+                // update the window
+                SDL_RenderPresent(rend);
+
+
+                // clear the window
+                if (clear) {
+                    Clear();
+                }
+                sprites = {};
+                if (!running) {
+                    SDL_DestroyWindow(win);
+                    SDL_DestroyRenderer(rend);
+                }
+                return running;
             }
-            // MADE BY JR01
-        }
-        void reset() {
-            TimeAtStart = SDL_GetTicks();
-            done = false;
-        }
-    private:
-        //------------------------
-        //        EASES          |
-        //------------------------
 
-        double SineIn(double A) {
-            return 1 - cos((A / 100) * M_PI / 2);
-        }
-        double SineOut(double A) {
-            return std::sin((A / 100) * M_PI / 2);
-        }
-        double SineInOut(double A) {
-            return -(std::cos(M_PI * (A / 100)) - 1) / 2;
-        }
-        double CubicIn(double A) {
-            return std::pow(A / 100, 3);
-        }
-        double CubicOut(double A) {
-            return 1 - std::pow(1 - A / 100, 3);
-        }
-        double CubicInOut(double A) {
-            return (A / 100) < 0.5 ? 4 * std::pow(A / 100, 3) : 1 - std::pow(-2 * (A / 100) + 2, 3) / 2;
-        }
-        double QuintIn(double A) {
-            return std::pow(A / 100, 5);
-        }
-        double QuintOut(double A) {
-            return 1 - std::pow(1 - A / 100, 5);
-        }
-        double QuintInOut(double A) {
-            return (A / 100) < 0.5 ? 16 * std::pow(A / 100, 5) : 1 - std::pow(-2 * (A / 100) + 2, 5) / 2;
-        }
-        double CircIn(double A) {
-            return 1 - std::sqrt(1 - std::pow(A / 100, 2));
-        }
-        double CircOut(double A) {
-            return std::sqrt(1 - std::pow(A / 100 - 1, 2));
-        }
-        double CircInOut(double A) {
-            return (A / 100) < 0.5 ? (1 - std::sqrt(1 - std::pow(2 * (A / 100), 2))) / 2 : (std::sqrt(1 - std::pow(-2 * (A / 100) + 2, 2)) + 1) / 2;
-        }
-        double ElasticIn(double A) {
-            double c4 = (2 * M_PI) / 3;
-            return (A / 100) == 0 ? 0 : (A / 100) == 1 ? 1 : -std::pow(2, 10 * (A / 100) - 10) * std::sin(((A / 100) * 10 - 10.75) * c4);
-        }
-        double ElasticOut(double A) {
-            double c4 = (2 * M_PI) / 3;
-            return (A / 100) == 0 ? 0 : (A / 100) == 1 ? 1 : std::pow(2, -10 * (A / 100)) * std::sin(((A / 100) * 10 - 0.75) * c4) + 1;
-        }
-        double ElasticInOut(double A) {
-            double c5 = (2 * M_PI) / 4.5;
-            return (A / 100) == 0 ? 0 : (A / 100) == 1 ? 1 : (A / 100) < 0.5 ? -(std::pow(2, 20 * (A / 100) - 10) * std::sin((20 * (A / 100) - 11.125) * c5)) / 2 : (std::pow(2, -20 * (A / 100) + 10) * std::sin((20 * (A / 100) - 11.125) * c5)) / 2 + 1;
-        }
-        double QuadIn(double A) {
-            return std::pow(A / 100, 2);
-        }
-        double QuadOut(double A) {
-            return 1 - (1 - A / 100) * (1 - A / 100);
-        }
-        double QuadInOut(double A) {
-            return (A / 100) < 0.5 ? 2 * std::pow(A / 100, 2) : 1 - std::pow(-2 * (A / 100) + 2, 2) / 2;
-        }
-        double QuartIn(double A) {
-            return std::pow(A / 100, 4);
-        }
-        double QuartOut(double A) {
-            return 1 - std::pow(1 - A / 100, 4);
-        }
-        double QuartInOut(double A) {
-            return (A / 100) < 0.5 ? 8 * std::pow(A / 100, 4) : 1 - std::pow(-2 * (A / 100) + 2, 4) / 2;
-        }
-        double ExpoIn(double A) {
-            return (A / 100) == 0 ? 0 : std::pow(2, 10 * (A / 100) - 10);
-        }
-        double ExpoOut(double A) {
-            return (A / 100) == 1 ? 1 : 1 - std::pow(2, -10 * (A / 100));
-        }
-        double ExpoInOut(double A) {
-            return (A / 100) == 0 ? 0 : (A / 100) == 1 ? 1 : (A / 100) < 0.5 ? std::pow(2, 20 * (A / 100) - 10) / 2 : (2 - std::pow(2, -20 * (A / 100) + 10)) / 2;
-        }
-        double BackIn(double A) {
-            double c1 = 1.70158;
-            double c3 = c1 + 1;
-            return c3 * std::pow(A / 100, 3) - c1 * std::pow(A / 100, 2);
-        }
-        double BackOut(double A) {
-            double c1 = 1.70158;
-            double c3 = c1 + 1;
-            return 1 + c3 * std::pow(A / 100 - 1, 3) + c1 * std::pow(A / 100 - 1, 2);
-        }
-        double BackInOut(double A) {
-            double c1 = 1.70158;
-            double c2 = c1 * 1.525;
-            return (A / 100) < 0.5 ? (std::pow(2 * (A / 100), 2) * ((c2 + 1) * 2 * (A / 100) - c2)) / 2 : (std::pow(2 * (A / 100) - 2, 2) * ((c2 + 1) * ((A / 100) * 2 - 2) + c2) + 2) / 2;
-        }
-        double BounceOut(double A) {
-            double n1 = 7.5625;
-            double d1 = 2.75;
-            if (A < 1 / d1) {
-                return n1 * A * A;
+            // if the window is full screen ( fullscreen will automatically stop when you press the esc key.)
+            bool fullscreen = false;
+
+            // display fps on the window
+            bool display_FPS = true;
+
+            // fps as a variable
+            int fps = 0;
+
+            // delta time for animations and movement
+            // delta time is the time since the last frame.
+            double dt = 0;
+
+            // set max frame rate
+            int max_FPS = 0;
+
+
+            // the window color
+            SDL_Color color = { 255,255,255,255 };
+
+            // clear the window with the window color.
+            bool clear = true;
+
+            // set window icon (this will not really work when you export your app,
+            // the icon will just be the app icon
+            void Set_Icon(std::string file) {
+                SDL_Surface* s = SDL_LoadBMP(file.c_str());
+                SDL_SetWindowIcon(win, s);
             }
-            else if (A < 2 / d1) {
-                return n1 * (A -= 1.5 / d1) * A + 0.75;
+
+            //--------------------------
+            //         DRAW            |
+            //--------------------------
+
+            // draw a pixel on the screen
+            void Draw(int x, int y, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    x -= cam.x;
+                    y -= cam.y;
+                }
+                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                SDL_RenderDrawPoint(rend, x, y);
             }
-            else if (A < 2.5 / d1) {
-                return n1 * (A -= 2.25 / d1) * A + 0.9375;
+            void Draw(SDL_Point point, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    point.x -= cam.x;
+                    point.y -= cam.y;
+                }
+                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                SDL_RenderDrawPoint(rend, point.x, point.y);
+                // Optionally use 'layer' argument for layer-specific logic
             }
-            else {
-                return n1 * (A -= 2.625 / d1) * A + 0.984375;
+
+            // draw and load sprites
+            SDL_Texture* Load_Sprite(std::string file) {
+                SDL_Texture* spriteTexture = SDL_CreateTextureFromSurface(rend, SDL_LoadBMP(file.c_str()));
+                if (!spriteTexture) {
+                    SDL_Log("Unable to load sprite texture: %s", SDL_GetError());
+                }
+                return spriteTexture;
             }
-        }
-        double BounceIn(double A) {
-            return 1 - BounceOut(1 - A);
-        }
-        double BounceInOut(double A) {
-            return A < 0.5 ? (1 - BounceOut(1 - 2 * A)) / 2 : (1 + BounceOut(2 * A - 1)) / 2;
-        }
-    };
-    // a timer, based on real time. 
-    class Timer {
+            void Draw_texture(int x, int y, int width, int height, double angle, SDL_Texture* t, SDL_Rect sorcrect = { 10,10,9,9 }, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    x -= cam.x;
+                    y -= cam.y;
+                }
+                SDL_Rect src = { static_cast<int> (x), static_cast<int> (y), static_cast<int> (width), static_cast<int> (height) };
+                if (sorcrect.x == 10 && sorcrect.y == 10 && sorcrect.w == 9 && sorcrect.h == 9) sorcrect = { 0,0,W,H };
+                SDL_RenderCopyEx(rend, t, &src, &sorcrect, angle, NULL, SDL_FLIP_NONE);
+            }
+            void Draw_Sprite(int x, int y, int width, int height, double angle, std::string file, int DisplayOrder = 99999, int layer = GAME_LAYER, SDL_RendererFlip flip = SDL_FLIP_NONE, SDL_Rect sorcrect = { 10,10,9,9 }) {
+                if (layer == GAME_LAYER) {
+                    x -= cam.x;
+                    y -= cam.y;
+                }
+                SDL_Texture* spriteTexture = SDL_CreateTextureFromSurface(rend, SDL_LoadBMP(file.c_str()));
+                _sprite s = { x,y,width,height,angle,file,sorcrect,layer };
+                s.flip = flip;
+                s.displayOrder = DisplayOrder;
+                sprites.push_back(s);
+            }
 
-    private:
-        std::chrono::high_resolution_clock::time_point startTime;
+            // draw a rectangle outline
+            void Draw_Rect(int X, int Y, int W, int H, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    X -= cam.x;
+                    Y -= cam.y;
+                }
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_Rect squareRect = { X, Y, W, H };
 
-    public:
-        Timer() {
-            Reset();
-        }
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderDrawRect(rend, &squareRect);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+            void Draw_Rect(SDL_Point pos, int w, int h, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    pos.x -= cam.x;
+                    pos.y -= cam.y;
+                }
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_Rect squareRect = { pos.x, pos.y, w, h };
 
-        void Reset() {
-            startTime = std::chrono::high_resolution_clock::now();
-        }
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderDrawRect(rend, &squareRect);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
 
-        double Get_Time() const {
-            auto currentTime = std::chrono::high_resolution_clock::now();
-            std::chrono::duration<double> elapsedTime = currentTime - startTime;
-            return elapsedTime.count();
-        }
-    };
+            // draw a line
+            void Draw_Line(int X, int Y, int X1, int Y1, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    X -= cam.x;
+                    Y -= cam.y;
+                    X1 -= cam.x;
+                    Y1 -= cam.y;
+                }
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderDrawLine(rend, X, Y, X1, Y1);
+            }
+            void Draw_Line(SDL_Point pos, SDL_Point pos2, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    pos.x -= cam.x;
+                    pos.y -= cam.y;
+                    pos2.x -= cam.x;
+                    pos2.y -= cam.y;
+                }
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderDrawLine(rend, pos.x, pos.y, pos2.x, pos2.y);
+            }
+
+            // draw a filled rectangle
+            void Fill_Rect(int X, int Y, int W, int H, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    X -= cam.x;
+                    Y -= cam.y;
+                }
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_Rect squareRect = { X, Y, W, H };
+
+                SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderFillRect(rend, &squareRect);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+            void Fill_Rect(SDL_Point pos, int W, int H, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    pos.x -= cam.x;
+                    pos.y -= cam.y;
+                }
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_Rect squareRect = { pos.x, pos.y, W, H };
+
+                SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderFillRect(rend, &squareRect);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+
+            // draw and fill a circle
+            void Draw_Circle(int x, int y, int rad, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    x -= cam.x;
+                    y -= cam.y;
+                }
+                b2Vec2 last = AngleAndDistance_To(x, y, 0, rad / 2);
+                b2Vec2 first = last;
+                for (int angle = 1; angle <= 360; angle++) {
+                    b2Vec2 point = AngleAndDistance_To(x, y, angle, rad / 2);
+                    SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                    SDL_RenderDrawLine(rend, last.x, last.y, point.x, point.y);
+                    last = point;
+                }
+            }
+            void Fill_Circle(int x, int y, int rad, SDL_Color color, int layer = GAME_LAYER) {
+                if (layer == GAME_LAYER) {
+                    x -= cam.x;
+                    y -= cam.y;
+                }
+
+                b2Vec2 last = AngleAndDistance_To(x, y, 0, rad / 2);
+                b2Vec2 first = last;
+                for (int angle = 1; angle <= 360; angle++) {
+                    b2Vec2 point = AngleAndDistance_To(x, y, angle, rad / 2);
+
+                    std::vector<SDL_Vertex> vertexArray {
+                        {{last.x, last.y }, color, { point.x, point.y }},
+                        { {point.x, point.y },	color, { static_cast<float> (x), static_cast<float> (y) } },
+                        { {static_cast<float> (x), static_cast<float> (y)},	color, {last.x, last.y} },
+                    };
+
+                    // Now you can use vertexArray in your SDL_RenderGeometry function call
+                    SDL_RenderGeometry(rend, NULL, vertexArray.data(), 3, NULL, 0);
+
+                    last = point;
+                }
+            }
+
+            // draw and fill a non convex polygon shape
+            void Draw_Polygon(std::vector<b2Vec2> v, SDL_Color c, int x = 0, int y = 0) {
+                if (v.size() < 2) return;
+
+                b2Vec2 first = v[0];
+                b2Vec2 previous = first;
+
+                for (size_t i = 1; i < v.size(); i++) {
+                    b2Vec2 current = v[i];
+                    Draw_Line(previous.x + x, previous.y + y, current.x + x, current.y + y, c);
+                    previous = current;
+                }
+
+                // Connect the last point to the first one to close the shape
+                Draw_Line(previous.x + x, previous.y + y, first.x + x, first.y + y, c);
+
+            }
+            void Fill_Polygon(const std::vector<b2Vec2> vertices, const SDL_Color color) {
+                int n = vertices.size();
+
+                SDL_Vertex* verts = new SDL_Vertex[n];
+                for (int i = 0; i < n; i++) {
+                    verts[i].position.x = vertices[i].x;
+                    verts[i].position.y = vertices[i].y;
+                    verts[i].color = color;
+                }
+
+                int* indices = new int[(n - 2) * 3];
+                for (int i = 1; i < n - 1; i++) {
+                    indices[3 * (i - 1)] = 0;
+                    indices[3 * i - 2] = i;
+                    indices[3 * i - 1] = i + 1;
+                }
+
+                SDL_RenderGeometry(rend, NULL, verts, n, indices, (n - 2) * 3);
+                free(indices);
+                free(verts);
+            }
+
+            // draw text on the screen. you must have a font downloaded
+            void Draw_String(int x, int y, int size, double angle, std::string text, std::string f, SDL_Color color) {
+                TTF_Font* font = TTF_OpenFont(f.c_str(), size);
+                if (!rend || !font) {
+                    std::cerr << "Renderer or font is invalid." << std::endl;
+                    return;
+                }
+
+                // Create a transformation matrix for rotating the text
+                SDL_Point center = { x, y };
+                SDL_Rect textRect = { 0, 0, 0, 0 };
+                SDL_Surface* textSurface = nullptr;
+                SDL_Texture* textTexture = nullptr;
+
+                // Rotate the text
+                if (angle != 0.0) {
+                    SDL_Surface* tempSurface = TTF_RenderText_Solid(font, text.c_str(), color);
+                    if (!tempSurface) {
+                        std::cerr << "Text rendering failed: " << TTF_GetError() << std::endl;
+                        return;
+                    }
+
+                    SDL_Texture* tempTexture = SDL_CreateTextureFromSurface(rend, tempSurface);
+                    SDL_FreeSurface(tempSurface);
+                    if (!tempTexture) {
+                        std::cerr << "Texture creation failed: " << SDL_GetError() << std::endl;
+                        return;
+                    }
+
+                    SDL_QueryTexture(tempTexture, nullptr, nullptr, &textRect.w, &textRect.h);
+
+                    SDL_SetRenderTarget(rend, nullptr);
+
+                    SDL_RenderCopyEx(rend, tempTexture, nullptr, &textRect, angle, &center, SDL_FLIP_NONE);
+
+                    SDL_DestroyTexture(tempTexture);
+                }
+                else {
+                    textSurface = TTF_RenderText_Solid(font, text.c_str(), color);
+                    if (!textSurface) {
+                        std::cerr << "Text rendering failed: " << TTF_GetError() << std::endl;
+                        return;
+                    }
+
+                    textTexture = SDL_CreateTextureFromSurface(rend, textSurface);
+                    if (!textTexture) {
+                        std::cerr << "Texture creation failed: " << SDL_GetError() << std::endl;
+                        return;
+                    }
+
+                    SDL_QueryTexture(textTexture, nullptr, nullptr, &textRect.w, &textRect.h);
+                }
+
+                textRect.x = x;
+                textRect.y = y;
+                textRect.w = int(size * textRect.w / textRect.h);
+                textRect.h = size;
+
+                SDL_RenderCopyEx(rend, textTexture, nullptr, &textRect, angle, &center, SDL_FLIP_NONE);
+
+                SDL_DestroyTexture(textTexture);
+                SDL_FreeSurface(textSurface);
+            }
+
+            // draw a sprite sheet animation
+            void Draw_Animation(int x, int y, int w, int h, double angle, animation* an, int displayOrder = 99999, int layer = GAME_LAYER, SDL_RendererFlip flip = SDL_FLIP_NONE) {
+                double frameDuration = an->duration / an->frameCount;
+                an->elapsedTime += dt;
+                int NextFrame = an->currentFrame + 1;
+                std::cout << "current frame: " << an->currentFrame << "\n";
+
+                Draw_Frame(an->currentFrame, x, y, w, h, angle, an, displayOrder, layer, flip);
+
+                if (an->elapsedTime >= frameDuration * NextFrame) an->currentFrame++;
+                if (an->elapsedTime >= an->duration) {
+                    an->currentFrame = 0;
+                    an->elapsedTime = 0;
+                }
+
+            }
+            void Draw_Frame(int frameIndex, int x, int y, int w, int h, double angle, animation* an, int displayOrder = 99999, int game_layer = GAME_LAYER, SDL_RendererFlip flip = SDL_FLIP_NONE) {
+                if (frameIndex >= an->frameCount) return;
+
+                int frameWidth = an->sheetW / an->coloumnCount;
+                int frameHeight = an->sheetH / an->rowCount;
+
+                // Calculate the position of the frame on the sprite sheet based on frameIndex
+                int frameX = (frameIndex % an->coloumnCount) * frameWidth;
+                int frameY = (frameIndex / an->coloumnCount) * frameHeight;
+
+                // Calculate the scaled frame width and height based on w and h arguments
+                int scaledFrameWidth = w;
+                int scaledFrameHeight = h;
+
+                SDL_Rect r = { frameX, frameY, frameWidth, frameHeight };
+
+                // Call Draw_Sprite to draw the frame from the sprite sheet with the specified w and h
+                Draw_Sprite(x, y, scaledFrameWidth, scaledFrameHeight, angle, an->file, displayOrder, game_layer, flip, r);
+            }
+
+            //---------------------------
+            //           OTHER          |
+            //---------------------------
+
+            // get events that are not already detected by the class
+            bool Event_Loop() {
+                static int iteration = 0;
+                if (iteration == events.size()) {
+                    iteration = 0;
+                    return false;
+                }
+                event = events[iteration];
+                iteration++;
+
+                event.window.windowID = SDL_GetWindowID(win);
+                return true;
+            }
+
+            // event that you got from the Event_Loop() function
+            SDL_Event event;
+
+            // game camera, this only affects sprites and shapes tagged with GAME_OBJECT
+            camera cam = { 0,0,W,H };
+
+        private:
+
+            // sprites to load
+            std::vector<_sprite> sprites = {};
+
+            SDL_Event ev;
+            std::vector<SDL_Event> events;
+
+            // if the window is running
+            bool running = true;
+
+            bool _k_a_allowed = true;
+            bool _k_b_allowed = true;
+            bool _k_c_allowed = true;
+            bool _k_d_allowed = true;
+            bool _k_e_allowed = true;
+            bool _k_f_allowed = true;
+            bool _k_g_allowed = true;
+            bool _k_h_allowed = true;
+            bool _k_i_allowed = true;
+            bool _k_j_allowed = true;
+            bool _k_k_allowed = true;
+            bool _k_l_allowed = true;
+            bool _k_m_allowed = true;
+            bool _k_n_allowed = true;
+            bool _k_o_allowed = true;
+            bool _k_p_allowed = true;
+            bool _k_q_allowed = true;
+            bool _k_r_allowed = true;
+            bool _k_s_allowed = true;
+            bool _k_t_allowed = true;
+            bool _k_u_allowed = true;
+            bool _k_v_allowed = true;
+            bool _k_w_allowed = true;
+            bool _k_x_allowed = true;
+            bool _k_y_allowed = true;
+            bool _k_z_allowed = true;
+            bool _k_space_allowed = true;
+            bool _k_enter_allowed = true;
+            bool _k_escape_allowed = true;
+            bool _k_shift_allowed = true;
+            bool _k_ctrl_allowed = true;
+            bool _k_alt_allowed = true;
+            bool _k_semicolon_allowed = true;
+            bool _k_apostrophe_allowed = true;
+            bool _k_period_allowed = true;
+            bool _k_comma_allowed = true;
+            bool _k_slash_allowed = true;
+            bool _k_backslash_allowed = true;
+            bool _k_asterisk_allowed = true;
+            bool _k_equals_allowed = true;
+            bool _k_minus_allowed = true;
+            bool _k_0_allowed = true;
+            bool _k_1_allowed = true;
+            bool _k_2_allowed = true;
+            bool _k_3_allowed = true;
+            bool _k_4_allowed = true;
+            bool _k_5_allowed = true;
+            bool _k_6_allowed = true;
+            bool _k_7_allowed = true;
+            bool _k_8_allowed = true;
+            bool _k_9_allowed = true;
+            bool _k_up_allowed = true;
+            bool _k_down_allowed = true;
+            bool _k_left_allowed = true;
+            bool _k_right_allowed = true;
+
+            int last_m_x = 0;
+            int last_m_y = 0;
+            double lastfps = 0;
+
+            void Reset_Events() {
+                events = {};
+                // keyboard events
+                k_a_pressed = false;
+                k_a_released = false;
+                k_b_pressed = false;
+                k_b_released = false;
+                k_c_pressed = false;
+                k_c_released = false;
+                k_d_pressed = false;
+                k_d_released = false;
+                k_e_pressed = false;
+                k_e_released = false;
+                k_f_pressed = false;
+                k_f_released = false;
+                k_g_pressed = false;
+                k_g_released = false;
+                k_h_pressed = false;
+                k_h_released = false;
+                k_i_pressed = false;
+                k_i_released = false;
+                k_j_pressed = false;
+                k_j_released = false;
+                k_k_pressed = false;
+                k_k_released = false;
+                k_l_pressed = false;
+                k_l_released = false;
+                k_m_pressed = false;
+                k_m_released = false;
+                k_n_pressed = false;
+                k_n_released = false;
+                k_o_pressed = false;
+                k_o_released = false;
+                k_p_pressed = false;
+                k_p_released = false;
+                k_q_pressed = false;
+                k_q_released = false;
+                k_r_pressed = false;
+                k_r_released = false;
+                k_s_pressed = false;
+                k_s_released = false;
+                k_t_pressed = false;
+                k_t_released = false;
+                k_u_pressed = false;
+                k_u_released = false;
+                k_v_pressed = false;
+                k_v_released = false;
+                k_w_pressed = false;
+                k_w_released = false;
+                k_x_pressed = false;
+                k_x_released = false;
+                k_y_pressed = false;
+                k_y_released = false;
+                k_z_pressed = false;
+                k_z_released = false;
+                k_space_pressed = false;
+                k_space_released = false;
+                k_enter_pressed = false;
+                k_enter_released = false;
+                k_escape_pressed = false;
+                k_escape_released = false;
+                k_shift_pressed = false;
+                k_shift_released = false;
+                k_ctrl_pressed = false;
+                k_ctrl_released = false;
+                k_alt_pressed = false;
+                k_alt_released = false;
+                k_semicolon_pressed = false;
+                k_semicolon_released = false;
+                k_apostrophe_pressed = false;
+                k_apostrophe_released = false;
+                k_period_pressed = false;
+                k_period_released = false;
+                k_comma_pressed = false;
+                k_comma_released = false;
+                k_slash_pressed = false;
+                k_slash_released = false;
+                k_backslash_pressed = false;
+                k_backslash_released = false;
+                k_asterisk_pressed = false;
+                k_asterisk_released = false;
+                k_equals_pressed = false;
+                k_equals_released = false;
+                k_minus_pressed = false;
+                k_minus_released = false;
+                k_0_pressed = false;
+                k_0_released = false;
+                k_1_pressed = false;
+                k_1_released = false;
+                k_2_pressed = false;
+                k_2_released = false;
+                k_3_pressed = false;
+                k_3_released = false;
+                k_4_pressed = false;
+                k_4_released = false;
+                k_5_pressed = false;
+                k_5_released = false;
+                k_6_pressed = false;
+                k_6_released = false;
+                k_7_pressed = false;
+                k_7_released = false;
+                k_8_pressed = false;
+                k_8_released = false;
+                k_9_pressed = false;
+                k_9_released = false;
+                k_up_pressed = false;
+                k_up_released = false;
+                k_down_pressed = false;
+                k_down_released = false;
+                k_left_pressed = false;
+                k_left_released = false;
+                k_right_pressed = false;
+                k_right_released = false;
+
+                m_left_pressed = false;
+                m_left_released = false;
+                m_right_pressed = false;
+                m_right_released = false;
+            }
+
+            void Get_Events() {
+                Reset_Events();
+                while (SDL_PollEvent(&ev)) {
+                    if (ev.type == SDL_QUIT) running = false;
+                    if (ev.type == SDL_MOUSEBUTTONDOWN) {
+                        if (ev.button.button == SDL_BUTTON_LEFT) {
+                            m_left_pressed = true;
+                            m_left_held = true;
+                        }
+                        if (ev.button.button == SDL_BUTTON_RIGHT) {
+                            m_right_pressed = true;
+                            m_right_held = true;
+                        }
+                    }
+                    if (ev.type == SDL_MOUSEBUTTONUP) {
+                        if (ev.button.button == SDL_BUTTON_LEFT) {
+                            m_left_released = true;
+                            m_left_held = false;
+                        }
+                        if (ev.button.button == SDL_BUTTON_RIGHT) {
+                            m_right_released = true;
+                            m_right_held = false;
+                        }
+                    }
+                    if (ev.type == SDL_MOUSEWHEEL) m_wheel_x = ev.wheel.x, m_wheel_y = ev.wheel.y;
+                    else if (ev.type == SDL_KEYDOWN) {
+                        switch (ev.key.keysym.sym) {
+                        case SDLK_a:
+
+                            if (_k_a_allowed) k_a_pressed = true;
+                            k_a_held = true;
+                            _k_a_allowed = false;
+                            break;
+
+                        case SDLK_b:
+
+                            if (_k_b_allowed) k_b_pressed = true;
+                            k_b_held = true;
+                            _k_b_allowed = false;
+
+                            break;
+
+                        case SDLK_c:
+
+                            if (_k_c_allowed) k_c_pressed = true;
+                            k_c_held = true;
+                            _k_c_allowed = false;
+
+                            break;
+
+                        case SDLK_d:
+
+                            if (_k_d_allowed) k_d_pressed = true;
+                            k_d_held = true;
+                            _k_d_allowed = false;
+
+                            break;
+
+                        case SDLK_e:
+
+                            if (_k_e_allowed) k_e_pressed = true;
+                            k_e_held = true;
+                            _k_e_allowed = false;
+
+                            break;
+
+                        case SDLK_f:
+
+                            if (_k_f_allowed) k_f_pressed = true;
+                            k_f_held = true;
+                            _k_f_allowed = false;
+
+                            break;
+
+                        case SDLK_g:
+
+                            if (_k_g_allowed) k_g_pressed = true;
+                            k_g_held = true;
+                            _k_g_allowed = false;
+
+                            break;
+
+                        case SDLK_h:
+
+                            if (_k_h_allowed) k_h_pressed = true;
+                            k_h_held = true;
+                            _k_h_allowed = false;
+
+                            break;
+
+                        case SDLK_i:
+
+                            if (_k_i_allowed) k_i_pressed = true;
+                            k_i_held = true;
+                            _k_i_allowed = false;
+
+                            break;
+
+                        case SDLK_j:
+
+                            if (_k_j_allowed) k_j_pressed = true;
+                            k_j_held = true;
+                            _k_j_allowed = false;
+
+                            break;
+
+                        case SDLK_k:
+
+                            if (_k_k_allowed) k_k_pressed = true;
+                            k_k_held = true;
+                            _k_j_allowed = false;
+
+                            break;
+
+                        case SDLK_l:
+
+                            if (_k_l_allowed) k_l_pressed = true;
+                            k_l_held = true;
+                            _k_l_allowed = false;
+
+                            break;
+
+                        case SDLK_m:
+
+                            if (_k_m_allowed) k_m_pressed = true;
+                            k_m_held = true;
+                            _k_m_allowed = false;
+
+                            break;
+
+                        case SDLK_n:
+
+                            if (_k_n_allowed) k_n_pressed = true;
+                            k_n_held = true;
+                            _k_n_allowed = false;
+
+                            break;
+
+                        case SDLK_o:
+
+                            if (_k_o_allowed) k_o_pressed = true;
+                            k_o_held = true;
+                            _k_o_allowed = false;
+
+                            break;
+
+                        case SDLK_p:
+
+                            if (_k_p_allowed) k_p_pressed = true;
+                            k_p_held = true;
+                            _k_p_allowed = false;
+
+                            break;
+
+                        case SDLK_q:
+
+                            if (_k_q_allowed) k_q_pressed = true;
+                            k_q_held = true;
+                            _k_q_allowed = false;
+
+                            break;
+
+                        case SDLK_r:
+
+                            if (_k_r_allowed) k_r_pressed = true;
+                            k_r_held = true;
+                            _k_r_allowed = false;
+
+                            break;
+
+                        case SDLK_s:
+
+                            if (_k_s_allowed) k_s_pressed = true;
+                            k_s_held = true;
+                            _k_s_allowed = false;
+
+                            break;
+
+                        case SDLK_t:
+
+                            if (_k_t_allowed) k_t_pressed = true;
+                            k_t_held = true;
+                            _k_t_allowed = false;
+
+                            break;
+
+                        case SDLK_u:
+
+                            if (_k_u_allowed) k_u_pressed = true;
+                            k_u_held = true;
+                            _k_u_allowed = false;
+
+                            break;
+
+                        case SDLK_v:
+
+                            if (_k_v_allowed) k_v_pressed = true;
+                            k_v_held = true;
+                            _k_v_allowed = false;
+
+                            break;
+
+                        case SDLK_w:
+
+                            if (_k_w_allowed) k_w_pressed = true;
+                            k_w_held = true;
+                            _k_w_allowed = false;
+
+                            break;
+
+                        case SDLK_x:
+
+                            if (_k_x_allowed) k_x_pressed = true;
+                            k_x_held = true;
+                            _k_x_allowed = false;
+
+                            break;
+
+                        case SDLK_y:
+
+                            if (_k_y_allowed) k_y_pressed = true;
+                            k_y_held = true;
+                            _k_y_allowed = false;
+
+                            break;
+
+                        case SDLK_z:
+
+                            if (_k_z_allowed) k_z_pressed = true;
+                            k_z_held = true;
+                            _k_z_allowed = false;
+
+                            break;
+
+                        case SDLK_SPACE:
+
+                            if (_k_space_allowed) k_space_pressed = true;
+                            k_space_held = true;
+                            _k_space_allowed = false;
+
+                            break;
+
+                        case SDLK_RETURN:
+
+                            if (_k_enter_allowed) k_enter_pressed = true;
+                            k_enter_held = true;
+                            _k_enter_allowed = false;
+
+                            break;
+
+                        case SDLK_ESCAPE:
+
+                            if (_k_escape_allowed) k_escape_pressed = true;
+                            k_escape_held = true;
+                            _k_escape_allowed = false;
+
+                            break;
+
+                        case SDLK_LSHIFT:
+                        case SDLK_RSHIFT:
+
+                            if (_k_shift_allowed) k_shift_pressed = true;
+                            k_shift_held = true;
+                            _k_shift_allowed = false;
+
+                            break;
+
+                        case SDLK_LCTRL:
+                        case SDLK_RCTRL:
+
+                            if (_k_ctrl_allowed) k_ctrl_pressed = true;
+                            k_ctrl_held = true;
+                            _k_ctrl_allowed = false;
+
+                            break;
+
+                        case SDLK_LALT:
+                        case SDLK_RALT:
+
+                            if (_k_alt_allowed) k_alt_pressed = true;
+                            k_alt_held = true;
+                            _k_alt_allowed = false;
+
+                            break;
+
+                        case SDLK_SEMICOLON:
+
+                            if (_k_semicolon_allowed) k_semicolon_pressed = true;
+                            k_semicolon_held = true;
+                            _k_semicolon_allowed = false;
+
+                            break;
+
+                        case SDLK_PERIOD:
+
+                            if (_k_period_allowed) k_period_pressed = true;
+                            k_period_held = true;
+                            _k_period_allowed = false;
+
+                            break;
+
+                        case SDLK_COMMA:
+
+                            if (_k_comma_allowed) k_comma_pressed = true;
+                            k_comma_held = true;
+                            _k_comma_allowed = false;
+
+                            break;
+
+                        case SDLK_SLASH:
+
+                            if (_k_slash_allowed) k_slash_pressed = true;
+                            k_slash_held = true;
+                            _k_slash_allowed = false;
+
+                            break;
+
+                        case SDLK_BACKSLASH:
+
+                            if (_k_backslash_allowed) k_backslash_pressed = true;
+                            k_backslash_held = true;
+                            _k_backslash_allowed = false;
+
+                            break;
+
+                        case SDLK_ASTERISK:
+
+                            if (_k_asterisk_allowed) k_asterisk_pressed = true;
+                            k_asterisk_held = true;
+                            _k_asterisk_allowed = false;
+
+                            break;
+
+                        case SDLK_EQUALS:
+
+                            if (_k_equals_allowed) k_equals_pressed = true;
+                            k_equals_held = true;
+                            _k_equals_allowed = false;
+
+                            break;
+
+                        case SDLK_MINUS:
+
+                            if (_k_minus_allowed) k_minus_pressed = true;
+                            k_minus_held = true;
+                            _k_minus_allowed = false;
+
+                            break;
+
+                        case SDLK_UP:
+
+                            if (_k_up_allowed) k_up_pressed = true;
+                            k_up_held = true;
+                            _k_up_allowed = false;
+
+                            break;
+
+                        case SDLK_DOWN:
+
+                            if (_k_down_allowed) k_down_pressed = true;
+                            k_down_held = true;
+                            _k_down_allowed = false;
+
+                            break;
+
+                        case SDLK_LEFT:
+
+                            if (_k_left_allowed) k_left_pressed = true;
+                            k_left_held = true;
+                            _k_left_allowed = false;
+
+                            break;
+
+                        case SDLK_RIGHT:
+
+                            if (_k_right_allowed) k_right_pressed = true;
+                            k_right_held = true;
+                            _k_right_allowed = false;
+
+                            break;
+                        default:
+                            events.push_back(ev);
+                        }
+                    }
+                    else if (ev.type == SDL_KEYUP) {
+                        switch (ev.key.keysym.sym) {
+                        case SDLK_a:
+                            k_a_released = true;
+                            k_a_held = false;
+                            _k_a_allowed = true;
+                            break;
+
+                        case SDLK_b:
+                            k_b_released = true;
+                            k_b_held = false;
+                            _k_b_allowed = true;
+
+                            break;
+
+                        case SDLK_c:
+                            k_c_released = true;
+                            k_c_held = false;
+                            _k_c_allowed = true;
+
+                            break;
+
+                        case SDLK_d:
+                            k_d_released = true;
+                            k_d_held = false;
+                            _k_d_allowed = true;
+
+                            break;
+
+                        case SDLK_e:
+                            k_e_released = true;
+                            k_e_held = false;
+                            _k_e_allowed = true;
+
+                            break;
+
+                        case SDLK_f:
+                            k_f_released = true;
+                            k_f_held = false;
+                            _k_f_allowed = true;
+
+                            break;
+
+                        case SDLK_g:
+                            k_g_released = true;
+                            k_g_held = false;
+                            _k_g_allowed = true;
+
+                            break;
+
+                        case SDLK_h:
+                            k_h_released = true;
+                            k_h_held = false;
+                            _k_h_allowed = true;
+
+                            break;
+
+                        case SDLK_i:
+                            k_i_released = true;
+                            k_i_held = false;
+                            _k_i_allowed = true;
+
+                            break;
+
+                        case SDLK_j:
+                            k_j_released = true;
+                            k_j_held = false;
+                            _k_j_allowed = true;
+
+                            break;
+
+                        case SDLK_k:
+                            k_k_released = true;
+                            k_k_held = false;
+                            _k_k_allowed = true;
+
+                            break;
+
+                        case SDLK_l:
+                            k_l_released = true;
+                            k_l_held = false;
+                            _k_l_allowed = true;
+
+                            break;
+
+                        case SDLK_m:
+                            k_m_released = true;
+                            k_m_held = false;
+                            break;
+
+                        case SDLK_n:
+                            k_n_released = true;
+                            k_n_held = false;
+                            _k_n_allowed = true;
+
+                            break;
+
+                        case SDLK_o:
+                            k_o_released = true;
+                            k_o_held = false;
+                            _k_o_allowed = true;
+
+                            break;
+
+                        case SDLK_p:
+                            k_p_released = true;
+                            k_p_held = false;
+                            _k_p_allowed = true;
+
+                            break;
+
+                        case SDLK_q:
+                            k_q_released = true;
+                            k_q_held = false;
+                            _k_q_allowed = true;
+
+                            break;
+
+                        case SDLK_r:
+                            k_r_released = true;
+                            k_r_held = false;
+                            _k_r_allowed = true;
+
+                            break;
+
+                        case SDLK_s:
+                            k_s_released = true;
+                            k_s_held = false;
+                            _k_s_allowed = true;
+
+                            break;
+
+                        case SDLK_t:
+                            k_t_released = true;
+                            k_t_held = false;
+                            _k_t_allowed = true;
+
+                            break;
+
+                        case SDLK_u:
+                            k_u_released = true;
+                            k_u_held = false;
+                            _k_u_allowed = true;
+
+                            break;
+
+                        case SDLK_v:
+                            k_v_released = true;
+                            k_v_held = false;
+                            _k_v_allowed = true;
+
+                            break;
+
+                        case SDLK_w:
+                            k_w_released = true;
+                            k_w_held = false;
+                            _k_w_allowed = true;
+
+                            break;
+
+                        case SDLK_x:
+                            k_x_released = true;
+                            k_x_held = false;
+                            _k_x_allowed = true;
+
+                            break;
+
+                        case SDLK_y:
+                            k_y_released = true;
+                            k_y_held = false;
+                            _k_y_allowed = true;
+
+                            break;
+
+                        case SDLK_z:
+                            k_z_released = true;
+                            k_z_held = false;
+                            _k_z_allowed = true;
+
+                            break;
+
+                        case SDLK_SPACE:
+                            k_space_released = true;
+                            k_space_held = false;
+                            _k_space_allowed = true;
+
+                            break;
+
+                        case SDLK_RETURN:
+                            k_enter_released = true;
+                            k_enter_held = false;
+                            _k_enter_allowed = true;
+
+                            break;
+
+                        case SDLK_ESCAPE:
+                            k_escape_released = true;
+                            k_escape_held = false;
+                            _k_escape_allowed = true;
+
+                            break;
+
+                        case SDLK_LSHIFT:
+                        case SDLK_RSHIFT:
+                            k_shift_released = true;
+                            k_shift_held = false;
+                            _k_shift_allowed = true;
+
+                            break;
+
+                        case SDLK_LCTRL:
+                        case SDLK_RCTRL:
+                            k_ctrl_released = true;
+                            k_ctrl_held = false;
+                            _k_ctrl_allowed = true;
+
+                            break;
+
+                        case SDLK_LALT:
+                        case SDLK_RALT:
+                            k_alt_released = true;
+                            k_alt_held = false;
+                            _k_alt_allowed = true;
+
+                            break;
+
+                        case SDLK_SEMICOLON:
+                            k_semicolon_released = true;
+                            k_semicolon_held = false;
+                            _k_semicolon_allowed = true;
+
+                            break;
+
+                        case SDLK_PERIOD:
+                            k_period_released = true;
+                            k_period_held = false;
+                            _k_period_allowed = true;
+
+                            break;
+
+                        case SDLK_COMMA:
+                            k_comma_released = true;
+                            k_comma_held = false;
+                            _k_comma_allowed = true;
+
+                            break;
+
+                        case SDLK_SLASH:
+                            k_slash_released = true;
+                            k_slash_held = false;
+                            _k_slash_allowed = true;
+
+                            break;
+
+                        case SDLK_BACKSLASH:
+                            k_backslash_released = true;
+                            k_backslash_held = false;
+                            _k_backslash_allowed = true;
+
+                            break;
+
+                        case SDLK_ASTERISK:
+                            k_asterisk_released = true;
+                            k_asterisk_held = false;
+                            _k_asterisk_allowed = true;
+
+                            break;
+
+                        case SDLK_EQUALS:
+                            k_equals_released = true;
+                            k_equals_held = false;
+                            _k_equals_allowed = true;
+
+                            break;
+
+                        case SDLK_MINUS:
+                            k_minus_released = true;
+                            k_minus_held = false;
+                            _k_minus_allowed = true;
+
+                            break;
+
+                        case SDLK_UP:
+                            k_up_released = true;
+                            k_up_held = false;
+                            _k_up_allowed = true;
+
+                            break;
+
+                        case SDLK_DOWN:
+                            k_down_released = true;
+                            k_down_held = false;
+                            _k_down_allowed = true;
+
+                            break;
+
+                        case SDLK_LEFT:
+                            k_left_released = true;
+                            k_left_held = false;
+                            _k_left_allowed = true;
+
+                            break;
+
+                        case SDLK_RIGHT:
+                            k_right_released = true;
+                            k_right_held = false;
+                            _k_right_allowed = true;
+
+                            break;
+                        }
+
+                    }
+                    else events.push_back(ev);
+                }
+                SDL_GetMouseState(&m_x, &m_y);
+            }
+
+            void Clear() {
+                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                SDL_RenderClear(rend);
+            }
+
+            SDL_Rect Merge_Rectangles(const SDL_Rect& rect1, const SDL_Rect& rect2) {
+                SDL_Rect mergedRect;
+                mergedRect.x = min(rect1.x, rect2.x);
+                mergedRect.y = min(rect1.y, rect2.y);
+                mergedRect.w = max(rect1.x + rect1.w, rect2.x + rect2.w) - mergedRect.x;
+                mergedRect.h = max(rect1.y + rect1.h, rect2.y + rect2.h) - mergedRect.y;
+                return mergedRect;
+            }
+
+            void Cap_FPS(int cap) {
+                // Calculate the maximum frame time allowed for the desired FPS
+                double maxFT = 1.0 / cap;
+
+                // Get the time at the end of the frame
+                double frameEndTime = SDL_GetTicks() / 1000.0;
+
+                // Calculate the time it took to process the current frame
+                double frameTime = frameEndTime - lastFrameEndTime;
+
+                // Calculate the delay needed to cap the frame rate (if necessary)
+                double delayTime = maxFT - frameTime;
+
+                // Check if delay is needed and perform it
+                if (delayTime > 0) {
+                    SDL_Delay(static_cast<Uint32>(delayTime * 1000.0)); // Convert to milliseconds
+                }
+
+                // Update the time for the end of the next frame
+                lastFrameEndTime = SDL_GetTicks() / 1000.0;
+            }
+
+            void _Draw_Sprite(int x, int y, int width, int height, double angle, std::string file, SDL_Rect sorcrect = { 10,10,9,9 }, SDL_RendererFlip flip = SDL_FLIP_NONE) {
+
+                SDL_Texture* spriteTexture = SDL_CreateTextureFromSurface(rend, SDL_LoadBMP(file.c_str()));
+                SDL_Rect srcRect = { 0, 0, width, height };
+
+                if (sorcrect.x != 10 && sorcrect.y != 10 && sorcrect.w != 9 && sorcrect.h != 9) srcRect = sorcrect;
+                SDL_Rect destRect = { x, y, width, height };
+
+                if (!spriteTexture) {
+                    SDL_Log("Unable to load sprite texture: %s", SDL_GetError());
+                }
+
+                SDL_RenderCopyEx(rend, spriteTexture, &srcRect, &destRect, angle, NULL, flip);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+
+            bool CompareSprites(_sprite* sprite1, _sprite* sprite2) {
+                return sprite1->displayOrder > sprite2->displayOrder;
+            }
+            void SortSprites() {
+                std::sort(sprites.begin(), sprites.end(), [](const _sprite& a, const _sprite& b) {
+                    return a.displayOrder > b.displayOrder;
+                    });
+            }
+
+            double lastFrameEndTime = 0.0;
+
+            double FPS() {
+                static int frameCount = 0;
+                static double lastTime = 0.0;
+                double currentTime = SDL_GetTicks() / 1000.0;  // Get current time in seconds
+                frameCount++;
+
+                if (currentTime - lastTime >= 1.0) {
+                    double fps = static_cast<double>(frameCount) / (currentTime - lastTime);
+                    lastTime = currentTime;
+                    frameCount = 0;
+                    lastfps = fps; // Update lastFPS when the calculation is done
+                }
+
+                return lastfps; // Return lastFPS, which may be the last calculated FPS or -1.0
+            }
+
+            double Get_DT() {
+                static double lastTime = SDL_GetTicks() / 1000.0;
+                double currentTime = SDL_GetTicks() / 1000.0;
+                double deltaTime = currentTime - lastTime;
+                lastTime = currentTime;
+                return deltaTime;
+            }
+
+        };
+    }
 
     //------------------------
     //       functions       |
@@ -2700,6 +4553,16 @@ namespace ogf {
 
         SDL_Color blendedColor = { r, g, b, (alpha == 0 ? a : alpha) };
         return blendedColor;
+    }
+
+    // play sound
+    void Play_Sound(std::string file) {
+        // Build the mciSendString command to open and play the sound file
+        std::string command = "open \"" + file + "\" type mpegvideo alias mySound";
+        mciSendStringA(command.c_str(), NULL, 0, NULL);
+
+        // Play the sound
+        mciSendStringA("play mySound", NULL, 0, NULL);
     }
 
     //---------------------
@@ -2757,6 +4620,54 @@ namespace ogf {
         return color;
     }
 
+    //----------------------
+    //      save/load      |
+    //----------------------
+
+    bool Save(std::string content, const std::string& filename) {
+        std::ofstream file(filename);
+        if (!file.is_open()) {
+            std::cerr << "Error: Unable to open the file for writing." << std::endl;
+            return false;
+        }
+
+        file << content; // Write content to the file
+        file.close();
+        return true;
+    }
+    std::string Load(const std::string& filename) {
+        std::string out;
+        std::ifstream file(filename);
+        if (!file.is_open()) {
+            std::cerr << "Error: Unable to open the file for reading." << std::endl;
+            return "NULL";
+        }
+
+        std::string line;
+
+        while (std::getline(file, line)) {
+            out += line + "\n"; // Read each line and append it to the content
+        }
+
+        file.close();
+        return out;
+    }
+    bool Clear_File(const std::string& filename) {
+        std::ofstream file(filename, std::ios::trunc); // Open the file in truncation mode
+
+        if (!file.is_open()) {
+            std::cerr << "Error: Unable to open the file for clearing." << std::endl;
+            return false;
+        }
+
+        file.close();
+        return true;
+    }
+
+    //---------------------
+    //        other       |
+    //---------------------
+
     std::vector<std::vector<SDL_Color>> bmp_To_Vector(std::string Path) {
         SDL_Surface* surface = SDL_LoadBMP(Path.c_str());
         if (!surface) {
@@ -2778,7 +4689,6 @@ namespace ogf {
         SDL_FreeSurface(surface);
         return pixelData;
     }
-
     char* vector_To_Bmp(const std::vector<std::vector<SDL_Color>>& pixelData, std::string location, std::string name) {
         int width = pixelData[0].size();
         int height = pixelData.size();
@@ -2813,54 +4723,50 @@ namespace ogf {
         return charFileName;
     }
 
-    SDL_Surface* Sprite_To_Surface(std::string file) {
-        return SDL_LoadBMP(file.c_str());
-    }
-
-    void debug(std::string valname, double value, std::string additional = "") {
+    void debug_double(std::string valname, double value, std::string additional = "") {
         std::cout << "\n" + valname + ": ";
         std::cout << value;
         std::cout << additional;
     }
-    void debug(std::string valname, std::string value, std::string additional = "") {
+    void debug_string(std::string valname, std::string value, std::string additional = "") {
         std::cout << "\n" + valname + ": ";
         std::cout << value;
         std::cout << additional;
     }
-    void debug(std::string valname, bool value, std::string additional = "") {
+    void debug_bool(std::string valname, bool value, std::string additional = "") {
         std::cout << "\n" + valname + ": ";
         std::cout << (value == true ? "true" : "false");
         std::cout << additional;
     }
-    void debug(std::string valname, std::vector<int> list, std::string additional = "") {
+    void debug_intV(std::string valname, std::vector<int> list, std::string additional = "") {
         std::cout << "\n" + valname + ": " + "{ ";
         for (int i = 0; i < list.size(); i++) {
             std::cout << list[i] << (i == list.size() - 1 ? " " : ", ");
         }
         std::cout << "}" + additional;
     }
-    void debug(std::string valname, std::vector<float> list, std::string additional = "") {
+    void debug_floatV(std::string valname, std::vector<float> list, std::string additional = "") {
         std::cout << "\n" + valname + ": " + "{ ";
         for (int i = 0; i < list.size(); i++) {
             std::cout << list[i] << (i == list.size() - 1 ? " " : ", ");
         }
         std::cout << "}" + additional;
     }
-    void debug(std::string valname, std::vector < double > list, std::string additional = "") {
+    void debug_doubleV(std::string valname, std::vector < double > list, std::string additional = "") {
         std::cout << "\n" + valname + ": " + "{ ";
         for (int i = 0; i < list.size(); i++) {
             std::cout << list[i] << (i == list.size() - 1 ? " " : ", ");
         }
         std::cout << "}" + additional;
     }
-    void debug(std::string valname, std::vector<bool> list, std::string additional = "") {
+    void debug_boolV(std::string valname, std::vector<bool> list, std::string additional = "") {
         std::cout << "\n" + valname + ": " + "{ ";
         for (int i = 0; i < list.size(); i++) {
             std::cout << (list[i] == true ? "true" : "false") << (i == list.size() - 1 ? " " : ", ");
         }
         std::cout << "}" + additional;
     }
-    void debug(std::string valname, std::vector<std::string> list, std::string additional = "") {
+    void debug_stringV(std::string valname, std::vector<std::string> list, std::string additional = "") {
         std::cout << "\n" + valname + ": " + "{ ";
         for (int i = 0; i < list.size(); i++) {
             std::cout << list[i] << (i == list.size() - 1 ? " " : ", ");
