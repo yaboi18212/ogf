@@ -803,7 +803,7 @@ namespace ogf {
             }
 
             // Update Object
-            void Update() {
+            virtual void Update() {
                 if (body != nullptr) {
                     if (em.isEmmited) {
 
