@@ -92,14 +92,16 @@ namespace ogf {
     //earth gravity
 #define EARTH_GRAVITY {0,9.81}
     // game layers
-#define BG_LAYER 1
-#define GAME_LAYER 2
-#define UI_LAYER 3
-
-#define CIRCLE_TYPE 1
-#define RECT_TYPE 2
-#define POLYGON_TYPE 3
-
+    enum Layer {
+        BG_LAYER = 1,
+        GAME_LAYER = 2,
+        UI_LAYER  = 3,
+    };
+    enum Obj_Shape {
+        CIRCLE_SHAPE = 1,
+        RECT_SHAPE = 2,
+        POLYGON_SHAPE = 3,
+    };
     // pi
 #ifndef M_PI
 #define M_PI = 3.14159265358979323846
@@ -136,9 +138,9 @@ namespace ogf {
 #elif __ANDROID__
         return ANDROID;
 #elif __APPLE__
-        return OTHER;
+        return IOS;
 #else
-        return "Unknown";
+        return OTHER;
 #endif
     }
 
@@ -153,6 +155,7 @@ namespace ogf {
         int w;
         int h;
         bool pressed = false;
+        button() {}
         button(int _x, int _y, int _w, int _h) {
             x = _x;
             y = _y;
@@ -412,26 +415,6 @@ namespace ogf {
             return elapsedTime.count();
         }
     };
-    struct _sprite {
-
-        SDL_Rect dst;
-        std::string spr;
-        int gameLayer;
-        int x, y, w, h;
-        double angle;
-        SDL_RendererFlip flip = SDL_FLIP_NONE;
-        int displayOrder = 99999;
-        _sprite(int X, int Y, int W, int H, double Angle, std::string sprite, SDL_Rect dest, int gamel) {
-            spr = sprite;
-            x = X;
-            y = Y;
-            w = W;
-            h = H;
-            angle = Angle;
-            gameLayer = gamel;
-            dst = dest;
-        }
-    };
     struct animation {
         std::string file = "NULL";
         int rowCount = 1;
@@ -468,12 +451,35 @@ namespace ogf {
     };
 
     namespace No_Physics {
+
+        struct _texture {
+
+            SDL_Rect dst;
+            SDL_Texture* texture;
+            Layer layer;
+            int x, y, w, h;
+            double angle;
+            SDL_RendererFlip flip = SDL_FLIP_NONE;
+            int displayOrder = 99999;
+            _texture(int X, int Y, int W, int H, double Angle, SDL_Texture* _texture, SDL_Rect dest, Layer gamel) {
+                texture = _texture;
+                x = X;
+                y = Y;
+                w = W;
+                h = H;
+                angle = Angle;
+                layer = gamel;
+                dst = dest;
+            }
+        };
+        
         class Window {
         public:
-
+            
             bool operator== (Window o) {
                 return win == o.win;
             }
+
             // the window itself,for sdl functions
             SDL_Window* win = nullptr;
             // window dimensions
@@ -514,6 +520,511 @@ namespace ogf {
                 cam.wH = H;
             }
 
+            //----------------------------
+            //           GENERAL         |
+            //----------------------------
+
+            // this is the most important function in this entire class.
+
+            // add it to your while loop argument, and it will update the window,
+
+            // and if you are using physics it will also update that.
+
+            virtual bool Run() {
+                // events
+                Get_Events();
+                // delta time
+                dt = Get_DT();
+
+                // fps cap
+                Cap_FPS((max_FPS == 0 ? 2000 : max_FPS));
+
+                // mouse lock
+                if (m_lock) {
+                    SDL_SetRelativeMouseMode(SDL_TRUE);
+                    int x, y;
+
+                    SDL_GetRelativeMouseState(&x, &y);
+                    m_x += x;
+                    m_y += y;
+                }
+                else {
+                    SDL_SetRelativeMouseMode(SDL_FALSE);
+                }
+
+                // zoom
+                double z = cam.zoom / 100;
+                SDL_RenderSetScale(rend, z, z);
+
+                // window size
+                SDL_GetWindowSize(win, &W, &H);
+
+                // fullscreen
+                if (fullscreen) {
+                    SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN);
+                    if (k_escape_pressed) fullscreen = false;
+                }
+                else {
+                    SDL_SetWindowFullscreen(win, 0);
+                }
+
+                // show cursor
+                SDL_ShowCursor(m_show);
+
+                // mouse pos
+                if (!m_lock) SDL_GetMouseState(&m_x, &m_y);
+
+                // get fps
+                fps = FPS();
+
+                // window title
+                std::string new_name = (!display_FPS ? name : name + "    fps: " + std::to_string(fps));
+                SDL_SetWindowTitle(win, new_name.c_str());
+
+                // sort the sprites based on a display order
+                
+                // draw sprites
+                for (_texture i : textures) {
+                    SDL_Rect src = { i.x, i.y, i.w, i.h };
+                    if (i.layer == BG_LAYER) SDL_RenderCopyEx(rend, i.texture, &i.dst, &src, i.angle, NULL, i.flip);
+                }
+                for (_texture i : textures) {
+
+                    SDL_Rect src = { i.x, i.y, i.w, i.h };
+                    if (i.layer = BG_LAYER) SDL_RenderCopyEx(rend, i.texture, &i.dst, &src, i.angle, NULL, i.flip);
+                }
+                for (_texture i : textures) {
+                    SDL_Rect src = { i.x, i.y, i.w, i.h };
+                    if (i.layer == UI_LAYER) SDL_RenderCopyEx(rend, i.texture, &i.dst, &src, i.angle, NULL, i.flip);
+                }
+
+                // update the window
+                SDL_RenderPresent(rend);
+
+
+                // clear the window
+                if (clear) {
+                    Clear();
+                }
+                
+                Update();
+                textures = {};
+                if (!running) {
+                    SDL_DestroyWindow(win);
+                    SDL_DestroyRenderer(rend);
+                }
+                return running;
+            }
+            virtual void Update() {}
+            // if the window is full screen ( fullscreen will automatically stop when you press the esc key.)
+            bool fullscreen = false;
+
+            // display fps on the window
+            bool display_FPS = false;
+
+            // fps as a variable
+            int fps = 0;
+
+            // delta time for animations and movement
+
+            // delta time is the time since the last frame.
+            double dt = 0;
+
+            // set max frame rate
+            int max_FPS = 0;
+
+
+            // the window color
+            SDL_Color color = { 255,255,255,255 };
+
+            // clear the window with the window color.
+            bool clear = true;
+
+            // set window icon (this will not really work when you export your app,
+
+            // the icon will just be the app icon
+            void Set_Icon(std::string file) {
+                SDL_Surface* s = SDL_LoadBMP(file.c_str());
+                SDL_SetWindowIcon(win, s);
+            }
+
+            bool inView(b2Vec2 i, int viewBufferPixels = 0) {
+                return (i.x > W + viewBufferPixels || i.x < 0 - viewBufferPixels || i.y > H + viewBufferPixels || i.y < 0 - viewBufferPixels);
+
+            }
+
+            //--------------------------
+            //         DRAW            |
+            //--------------------------
+            
+            SDL_Texture* Load_Sprite(std::string file) {
+                SDL_Texture* spriteTexture = SDL_CreateTextureFromSurface(rend, SDL_LoadBMP(file.c_str()));
+                if (!spriteTexture) {
+                    SDL_Log("Unable to load sprite texture: %s", SDL_GetError());
+                }
+                return spriteTexture;
+            }
+            
+            void Draw_String(int x, int y, int size, double angle, std::string text, std::string f, SDL_Color color) {
+                TTF_Font* font = TTF_OpenFont(f.c_str(), size);
+                if (!rend || !font) {
+                    std::cerr << "Renderer or font is invalid." << std::endl;
+                    return;
+                }
+
+                // Create a transformation matrix for rotating the text
+                SDL_Point center = { x, y };
+                SDL_Rect textRect = { 0, 0, 0, 0 };
+                SDL_Surface* textSurface = nullptr;
+                SDL_Texture* textTexture = nullptr;
+
+                // Rotate the text
+                if (angle != 0.0) {
+                    SDL_Surface* tempSurface = TTF_RenderText_Solid(font, text.c_str(), color);
+                    if (!tempSurface) {
+                        std::cerr << "Text rendering failed: " << TTF_GetError() << std::endl;
+                        return;
+                    }
+
+                    SDL_Texture* tempTexture = SDL_CreateTextureFromSurface(rend, tempSurface);
+                    SDL_FreeSurface(tempSurface);
+                    if (!tempTexture) {
+                        std::cerr << "Texture creation failed: " << SDL_GetError() << std::endl;
+                        return;
+                    }
+
+                    SDL_QueryTexture(tempTexture, nullptr, nullptr, &textRect.w, &textRect.h);
+
+                    SDL_SetRenderTarget(rend, nullptr);
+
+                    SDL_RenderCopyEx(rend, tempTexture, nullptr, &textRect, angle, &center, SDL_FLIP_NONE);
+
+                    SDL_DestroyTexture(tempTexture);
+                }
+                else {
+                    textSurface = TTF_RenderText_Solid(font, text.c_str(), color);
+                    if (!textSurface) {
+                        std::cerr << "Text rendering failed: " << TTF_GetError() << std::endl;
+                        return;
+                    }
+
+                    textTexture = SDL_CreateTextureFromSurface(rend, textSurface);
+                    if (!textTexture) {
+                        std::cerr << "Texture creation failed: " << SDL_GetError() << std::endl;
+                        return;
+                    }
+
+                    SDL_QueryTexture(textTexture, nullptr, nullptr, &textRect.w, &textRect.h);
+                }
+
+                textRect.x = x;
+                textRect.y = y;
+                textRect.w = int(size * textRect.w / textRect.h);
+                textRect.h = size;
+
+                SDL_RenderCopyEx(rend, textTexture, nullptr, &textRect, angle, &center, SDL_FLIP_NONE);
+                SDL_DestroyTexture(textTexture);
+                SDL_FreeSurface(textSurface);
+
+
+            }
+            SDL_Rect Get_String_Rect(int x, int y, int size, double angle, std::string text, std::string f, SDL_Color color) {
+                TTF_Font* font = TTF_OpenFont(f.c_str(), size);
+                if (!rend || !font) {
+                    std::cerr << "Renderer or font is invalid." << std::endl;
+                    return { 0,0,0,0 };
+                }
+
+                // Create a transformation matrix for rotating the text
+                SDL_Point center = { x, y };
+                SDL_Rect textRect = { 0, 0, 0, 0 };
+                SDL_Surface* textSurface = nullptr;
+                SDL_Texture* textTexture = nullptr;
+
+                // Rotate the text
+                if (angle != 0.0) {
+                    SDL_Surface* tempSurface = TTF_RenderText_Solid(font, text.c_str(), color);
+                    if (!tempSurface) {
+                        std::cerr << "Text rendering failed: " << TTF_GetError() << std::endl;
+                        return{ 0,0,0,0 };
+                    }
+
+                    SDL_Texture* tempTexture = SDL_CreateTextureFromSurface(rend, tempSurface);
+                    SDL_FreeSurface(tempSurface);
+                    if (!tempTexture) {
+                        std::cerr << "Texture creation failed: " << SDL_GetError() << std::endl;
+                        return{ 0,0,0,0 };
+                    }
+
+                    SDL_QueryTexture(tempTexture, nullptr, nullptr, &textRect.w, &textRect.h);
+
+                    SDL_SetRenderTarget(rend, nullptr);
+
+                    SDL_RenderCopyEx(rend, tempTexture, nullptr, &textRect, angle, &center, SDL_FLIP_NONE);
+
+                    SDL_DestroyTexture(tempTexture);
+                }
+                else {
+                    textSurface = TTF_RenderText_Solid(font, text.c_str(), color);
+                    if (!textSurface) {
+                        std::cerr << "Text rendering failed: " << TTF_GetError() << std::endl;
+                        return{ 0,0,0,0 };
+                    }
+
+                    textTexture = SDL_CreateTextureFromSurface(rend, textSurface);
+                    if (!textTexture) {
+                        std::cerr << "Texture creation failed: " << SDL_GetError() << std::endl;
+                        return{ 0,0,0,0 };
+                    }
+
+                    SDL_QueryTexture(textTexture, nullptr, nullptr, &textRect.w, &textRect.h);
+                }
+
+                textRect.x = x;
+                textRect.y = y;
+                textRect.w = int(size * textRect.w / textRect.h);
+                textRect.h = size;
+
+                SDL_DestroyTexture(textTexture);
+                SDL_FreeSurface(textSurface);
+                return textRect;
+
+            }
+
+
+            // draw a pixel on the screen
+            void Draw(int x, int y, SDL_Color color) {
+                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                SDL_RenderDrawPoint(rend, x, y);
+            }
+            void Draw(b2Vec2 point, SDL_Color color) {
+                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                SDL_RenderDrawPoint(rend, point.x, point.y);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+
+            void Draw_Texture(int x, int y, int width, int height, double angle, SDL_Texture* t, SDL_Rect sorcrect = { 10,10,9,9 }, Layer layer = GAME_LAYER, int DisplayOrder = 99999, SDL_RendererFlip flip = SDL_FLIP_NONE) {
+                SDL_Rect src = { static_cast<int> (x), static_cast<int> (y), static_cast<int> (width), static_cast<int> (height) };
+                if (sorcrect.x == 10 && sorcrect.y == 10 && sorcrect.w == 9 && sorcrect.h == 9) sorcrect = { 0,0,W,H };
+                _texture te = { x,y,width,height,angle,t, sorcrect, layer };
+                te.displayOrder = DisplayOrder;
+                te.flip = flip;
+                textures.push_back(te);
+            }
+            void Draw_Sprite(int x, int y, int width, int height, double angle, std::string file, SDL_Rect sorcrect = { 10,10,9,9 }, Layer layer = GAME_LAYER, int DisplayOrder = 99999, SDL_RendererFlip flip = SDL_FLIP_NONE) {
+                SDL_Texture* spriteTexture = SDL_CreateTextureFromSurface(rend, SDL_LoadBMP(file.c_str()));
+                SDL_Rect src = { x,y,width,height };
+                if (sorcrect.x == 10 && sorcrect.y == 10 && sorcrect.w == 9 && sorcrect.h == 9) sorcrect = { 0,0,W,H };
+
+                _texture te = { x,y,width,height,angle, spriteTexture, sorcrect, layer };
+                te.displayOrder = DisplayOrder;
+                te.flip = flip;
+                textures.push_back(te);
+            }
+
+            // draw a rectangle outline
+            void Draw_Rect(int X, int Y, int W, int H, SDL_Color color) {
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_Rect squareRect = { X, Y, W, H };
+
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderDrawRect(rend, &squareRect);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+            void Draw_Rect(b2Vec2 pos, int w, int h, SDL_Color color) {
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_Rect squareRect = { pos.x, pos.y, w, h };
+
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderDrawRect(rend, &squareRect);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+
+            // draw a line
+            void Draw_Line(int X, int Y, int X1, int Y1, SDL_Color color) {
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderDrawLine(rend, X, Y, X1, Y1);
+            }
+            void Draw_Line(b2Vec2 pos, b2Vec2 pos2, SDL_Color color) {
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderDrawLine(rend, pos.x, pos.y, pos2.x, pos2.y);
+            }
+
+            // draw a filled rectangle
+            void Fill_Rect(int X, int Y, int W, int H, SDL_Color color) {
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_Rect squareRect = { X, Y, W, H };
+
+                SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderFillRect(rend, &squareRect);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+            void Fill_Rect(b2Vec2 pos, int W, int H, SDL_Color color) {
+                int R = color.r;
+                int G = color.g;
+                int B = color.b;
+                int A = color.a;
+                SDL_Rect squareRect = { pos.x, pos.y, W, H };
+
+                SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(rend, R, G, B, A);
+                SDL_RenderFillRect(rend, &squareRect);
+                // Optionally use 'layer' argument for layer-specific logic
+            }
+
+            // draw and fill a circle
+            void Draw_Circle(int x, int y, int rad, SDL_Color color) {
+                b2Vec2 last = AngleAndDistance_To(x, y, 0, rad / 2);
+                b2Vec2 first = last;
+                for (int angle = 1; angle <= 360; angle++) {
+                    b2Vec2 point = AngleAndDistance_To(x, y, angle, rad / 2);
+                    SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
+                    SDL_RenderDrawLine(rend, last.x, last.y, point.x, point.y);
+                    last = point;
+                }
+            }
+            void Fill_Circle(int x, int y, int rad, SDL_Color color) {
+
+                b2Vec2 last = AngleAndDistance_To(x, y, 0, rad / 2);
+                b2Vec2 first = last;
+                for (int angle = 1; angle <= 360; angle++) {
+                    b2Vec2 point = AngleAndDistance_To(x, y, angle, rad / 2);
+
+                    std::vector<SDL_Vertex> vertexArray {
+                        {{last.x, last.y }, color, { point.x, point.y }},
+                        { {point.x, point.y },	color, { static_cast<float> (x), static_cast<float> (y) } },
+                        { {static_cast<float> (x), static_cast<float> (y)},	color, {last.x, last.y} },
+                    };
+
+                    // Now you can use vertexArray in your SDL_RenderGeometry function call
+                    SDL_RenderGeometry(rend, NULL, vertexArray.data(), 3, NULL, 0);
+
+                    last = point;
+                }
+            }
+
+            // draw and fill a non convex polygon shape
+            void Draw_Polygon(int x, int y, std::vector<b2Vec2> v, SDL_Color c) {
+                if (v.size() < 2) return;
+
+                b2Vec2 first = v[0];
+                b2Vec2 previous = first;
+
+                for (size_t i = 1; i < v.size(); i++) {
+                    b2Vec2 current = v[i];
+                    Draw_Line(previous.x + x, previous.y + y, current.x + x, current.y + y, c);
+                    previous = current;
+                }
+
+                // Connect the last point to the first one to close the shape
+                Draw_Line(previous.x + x, previous.y + y, first.x + x, first.y + y, c);
+
+            }
+            void Fill_Polygon(int x, int y, std::vector<b2Vec2> vertices, const SDL_Color color) {
+                int n = vertices.size();
+
+                SDL_Vertex* verts = new SDL_Vertex[n];
+                for (int i = 0; i < n; i++) {
+                    verts[i].position.x = vertices[i].x + x;
+                    verts[i].position.y = vertices[i].y + y;
+                    verts[i].color = color;
+                }
+
+                int* indices = new int[(n - 2) * 3];
+                for (int i = 1; i < n - 1; i++) {
+                    indices[3 * (i - 1)] = 0;
+                    indices[3 * i - 2] = i;
+                    indices[3 * i - 1] = i + 1;
+                }
+
+                SDL_RenderGeometry(rend, NULL, verts, n, indices, (n - 2) * 3);
+                delete indices;
+                delete verts;
+            }
+
+
+            // draw a sprite sheet animation
+            void Draw_Animation(int x, int y, int w, int h, double angle, animation* an, int displayOrder = 99999, Layer layer = GAME_LAYER, SDL_RendererFlip flip = SDL_FLIP_NONE) {
+                double frameDuration = an->duration / an->frameCount;
+                an->elapsedTime += dt;
+                int NextFrame = an->currentFrame + 1;
+                std::cout << "current frame: " << an->currentFrame << "\n";
+
+                Draw_Frame(an->currentFrame, x, y, w, h, angle, an, layer, displayOrder, flip);
+
+                if (an->elapsedTime >= frameDuration * NextFrame) an->currentFrame++;
+                if (an->elapsedTime >= an->duration) {
+                    an->currentFrame = 0;
+                    an->elapsedTime = 0;
+                }
+
+            }
+            void Draw_Frame(int frameIndex, int x, int y, int w, int h, double angle, animation* an, Layer layer = GAME_LAYER, int displayOrder = 99999, SDL_RendererFlip flip = SDL_FLIP_NONE) {
+                if (frameIndex >= an->frameCount) return;
+
+                int frameWidth = an->sheetW / an->coloumnCount;
+                int frameHeight = an->sheetH / an->rowCount;
+
+                // Calculate the position of the frame on the sprite sheet based on frameIndex
+                int frameX = (frameIndex % an->coloumnCount) * frameWidth;
+                int frameY = (frameIndex / an->coloumnCount) * frameHeight;
+
+                // Calculate the scaled frame width and height based on w and h arguments
+                int scaledFrameWidth = w;
+                int scaledFrameHeight = h;
+
+                SDL_Rect r = { frameX, frameY, frameWidth, frameHeight };
+
+                // Call Draw_Sprite to draw the frame from the sprite sheet with the specified w and h
+                Draw_Sprite(x, y, scaledFrameWidth, scaledFrameHeight, angle, an->file, r, layer, displayOrder, flip);
+            }
+
+
+            //---------------------------
+            //           OTHER          |
+            //---------------------------
+
+            // get events that are not already detected by the class
+            bool Event_Loop() {
+                static int iteration = 0;
+                if (iteration == events.size()) {
+                    iteration = 0;
+                    return false;
+                }
+                event = events[iteration];
+                iteration++;
+
+                event.window.windowID = SDL_GetWindowID(win);
+                return true;
+            }
+
+            // event that you got from the Event_Loop() function
+            SDL_Event event;
+
+            // game camera, this only affects sprites and shapes tagged with GAME_OBJECT
+            camera cam = { 0,0,W,H };
+
+            void Close() { running = false; }
+
+            std::vector<_texture> textures;
             //--------------------
             //       KEYS        |
             //--------------------
@@ -759,495 +1270,9 @@ namespace ogf {
             bool m_lock = false;
             bool m_show = true;
 
-            //----------------------------
-            //           GENERAL         |
-            //----------------------------
-
-            // this is the most important function in this entire class.
-
-            // add it to your while loop argument, and it will update the window,
-
-            // and if you are using physics it will also update that.
-
-            virtual bool Run() {
-                // events
-                Get_Events();
-                // delta time
-                dt = Get_DT();
-
-                // fps cap
-                Cap_FPS((max_FPS == 0 ? 2000 : max_FPS));
-
-                // mouse lock
-                if (m_lock) {
-                    SDL_SetRelativeMouseMode(SDL_TRUE);
-                    int x, y;
-
-                    SDL_GetRelativeMouseState(&x, &y);
-                    m_x += x;
-                    m_y += y;
-                }
-                else {
-                    SDL_SetRelativeMouseMode(SDL_FALSE);
-                }
-
-                // zoom
-                double z = cam.zoom / 100;
-                SDL_RenderSetScale(rend, z, z);
-
-                // window size
-                SDL_GetWindowSize(win, &W, &H);
-
-                // fullscreen
-                if (fullscreen) {
-                    SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN);
-                    if (k_escape_pressed) fullscreen = false;
-                }
-                else {
-                    SDL_SetWindowFullscreen(win, 0);
-                }
-
-                // show cursor
-                SDL_ShowCursor(m_show);
-
-                // mouse pos
-                if (!m_lock) SDL_GetMouseState(&m_x, &m_y);
-
-                // get fps
-                fps = FPS();
-
-                // window title
-                std::string new_name = (!display_FPS ? name : name + "    fps: " + std::to_string(fps));
-                SDL_SetWindowTitle(win, new_name.c_str());
-
-                // sort the sprites based on a display order
-                SortSprites();
-
-                // draw sprites
-                for (int i = 0; i < sprites.size(); i++) {
-                    _sprite s = sprites[i];
-                    if (s.gameLayer == UI_LAYER) _Draw_Sprite(s.x, s.y, s.w, s.h, s.angle * (-1), s.spr, s.dst, s.flip);
-                }
-                for (int i = 0; i < sprites.size(); i++) {
-                    _sprite s = sprites[i];
-                    if (s.gameLayer == GAME_LAYER) _Draw_Sprite(s.x, s.y, s.w, s.h, s.angle * (-1), s.spr, s.dst, s.flip);
-                }
-                for (int i = 0; i < sprites.size(); i++) {
-                    _sprite s = sprites[i];
-                    if (s.gameLayer == UI_LAYER) _Draw_Sprite(s.x, s.y, s.w, s.h, s.angle * (-1), s.spr, s.dst, s.flip);
-                }
-
-                // update the window
-                SDL_RenderPresent(rend);
-
-
-                // clear the window
-                if (clear) {
-                    Clear();
-                }
-                sprites = {};
-                if (!running) {
-                    SDL_DestroyWindow(win);
-                    SDL_DestroyRenderer(rend);
-                }
-                Update();
-                return running;
-            }
-            virtual void Update() {}
-            // if the window is full screen ( fullscreen will automatically stop when you press the esc key.)
-            bool fullscreen = false;
-
-            // display fps on the window
-            bool display_FPS = false;
-
-            // fps as a variable
-            int fps = 0;
-
-            // delta time for animations and movement
-
-            // delta time is the time since the last frame.
-            double dt = 0;
-
-            // set max frame rate
-            int max_FPS = 0;
-
-
-            // the window color
-            SDL_Color color = { 255,255,255,255 };
-
-            // clear the window with the window color.
-            bool clear = true;
-
-            // set window icon (this will not really work when you export your app,
-
-            // the icon will just be the app icon
-            void Set_Icon(std::string file) {
-                SDL_Surface* s = SDL_LoadBMP(file.c_str());
-                SDL_SetWindowIcon(win, s);
-            }
-
-            bool inView(b2Vec2 i, int viewBufferPixels = 0) {
-                return (i.x > W + viewBufferPixels || i.x < 0 - viewBufferPixels || i.y > H + viewBufferPixels || i.y < 0 - viewBufferPixels);
-
-            }
-
-            //--------------------------
-            //         DRAW            |
-            //--------------------------
-
-            // draw a pixel on the screen
-            void Draw(int x, int y, SDL_Color color, int layer = GAME_LAYER) {
-                if (layer == GAME_LAYER) {
-                    x -= cam.x;
-                    y -= cam.y;
-                }
-                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
-                SDL_RenderDrawPoint(rend, x, y);
-            }
-            void Draw(b2Vec2 point, SDL_Color color, int layer = GAME_LAYER) {
-                if (layer == GAME_LAYER) {
-                    point.x -= cam.x;
-                    point.y -= cam.y;
-                }
-                SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
-                SDL_RenderDrawPoint(rend, point.x, point.y);
-                // Optionally use 'layer' argument for layer-specific logic
-            }
-
-            // draw and load sprites
-            SDL_Texture* Load_Sprite(std::string file) {
-                SDL_Texture* spriteTexture = SDL_CreateTextureFromSurface(rend, SDL_LoadBMP(file.c_str()));
-                if (!spriteTexture) {
-                    SDL_Log("Unable to load sprite texture: %s", SDL_GetError());
-                }
-                return spriteTexture;
-            }
-            void Draw_texture(int x, int y, int width, int height, double angle, SDL_Texture* t, SDL_Rect sorcrect = { 10,10,9,9 }, int layer = GAME_LAYER) {
-                if (layer == GAME_LAYER) {
-                    x -= cam.x;
-                    y -= cam.y;
-                }
-                SDL_Rect src = { static_cast<int> (x), static_cast<int> (y), static_cast<int> (width), static_cast<int> (height) };
-                if (sorcrect.x == 10 && sorcrect.y == 10 && sorcrect.w == 9 && sorcrect.h == 9) sorcrect = { 0,0,W,H };
-                SDL_RenderCopyEx(rend, t, &src, &sorcrect, angle, NULL, SDL_FLIP_NONE);
-            }
-            void Draw_Sprite(int x, int y, int width, int height, double angle, std::string file, int DisplayOrder = 99999, int layer = GAME_LAYER, SDL_RendererFlip flip = SDL_FLIP_NONE, SDL_Rect sorcrect = { 10,10,9,9 }) {
-                if (layer == GAME_LAYER) {
-                    x -= cam.x;
-                    y -= cam.y;
-                }
-                SDL_Texture* spriteTexture = SDL_CreateTextureFromSurface(rend, SDL_LoadBMP(file.c_str()));
-                _sprite s = { x,y,width,height,angle,file,sorcrect,layer };
-                s.flip = flip;
-                s.displayOrder = DisplayOrder;
-                sprites.push_back(s);
-            }
-
-            // draw a rectangle outline
-            void Draw_Rect(int X, int Y, int W, int H, SDL_Color color, int layer = GAME_LAYER) {
-                if (layer == GAME_LAYER) {
-                    X -= cam.x;
-                    Y -= cam.y;
-                }
-                int R = color.r;
-                int G = color.g;
-                int B = color.b;
-                int A = color.a;
-                SDL_Rect squareRect = { X, Y, W, H };
-
-                SDL_SetRenderDrawColor(rend, R, G, B, A);
-                SDL_RenderDrawRect(rend, &squareRect);
-                // Optionally use 'layer' argument for layer-specific logic
-            }
-            void Draw_Rect(b2Vec2 pos, int w, int h, SDL_Color color, int layer = GAME_LAYER) {
-                if (layer == GAME_LAYER) {
-                    pos.x -= cam.x;
-                    pos.y -= cam.y;
-                }
-                int R = color.r;
-                int G = color.g;
-                int B = color.b;
-                int A = color.a;
-                SDL_Rect squareRect = { pos.x, pos.y, w, h };
-
-                SDL_SetRenderDrawColor(rend, R, G, B, A);
-                SDL_RenderDrawRect(rend, &squareRect);
-                // Optionally use 'layer' argument for layer-specific logic
-            }
-
-            // draw a line
-            void Draw_Line(int X, int Y, int X1, int Y1, SDL_Color color, int layer = GAME_LAYER) {
-                if (layer == GAME_LAYER) {
-                    X -= cam.x;
-                    Y -= cam.y;
-                    X1 -= cam.x;
-                    Y1 -= cam.y;
-                }
-                int R = color.r;
-                int G = color.g;
-                int B = color.b;
-                int A = color.a;
-                SDL_SetRenderDrawColor(rend, R, G, B, A);
-                SDL_RenderDrawLine(rend, X, Y, X1, Y1);
-            }
-            void Draw_Line(b2Vec2 pos, b2Vec2 pos2, SDL_Color color, int layer = GAME_LAYER) {
-                if (layer == GAME_LAYER) {
-                    pos.x -= cam.x;
-                    pos.y -= cam.y;
-                    pos2.x -= cam.x;
-                    pos2.y -= cam.y;
-                }
-                int R = color.r;
-                int G = color.g;
-                int B = color.b;
-                int A = color.a;
-                SDL_SetRenderDrawColor(rend, R, G, B, A);
-                SDL_RenderDrawLine(rend, pos.x, pos.y, pos2.x, pos2.y);
-            }
-
-            // draw a filled rectangle
-            void Fill_Rect(int X, int Y, int W, int H, SDL_Color color, int layer = GAME_LAYER) {
-                if (layer == GAME_LAYER) {
-                    X -= cam.x;
-                    Y -= cam.y;
-                }
-                int R = color.r;
-                int G = color.g;
-                int B = color.b;
-                int A = color.a;
-                SDL_Rect squareRect = { X, Y, W, H };
-
-                SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
-                SDL_SetRenderDrawColor(rend, R, G, B, A);
-                SDL_RenderFillRect(rend, &squareRect);
-                // Optionally use 'layer' argument for layer-specific logic
-            }
-            void Fill_Rect(b2Vec2 pos, int W, int H, SDL_Color color, int layer = GAME_LAYER) {
-                if (layer == GAME_LAYER) {
-                    pos.x -= cam.x;
-                    pos.y -= cam.y;
-                }
-                int R = color.r;
-                int G = color.g;
-                int B = color.b;
-                int A = color.a;
-                SDL_Rect squareRect = { pos.x, pos.y, W, H };
-
-                SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
-                SDL_SetRenderDrawColor(rend, R, G, B, A);
-                SDL_RenderFillRect(rend, &squareRect);
-                // Optionally use 'layer' argument for layer-specific logic
-            }
-
-            // draw and fill a circle
-            void Draw_Circle(int x, int y, int rad, SDL_Color color, int layer = GAME_LAYER) {
-                if (layer == GAME_LAYER) {
-                    x -= cam.x;
-                    y -= cam.y;
-                }
-                b2Vec2 last = AngleAndDistance_To(x, y, 0, rad / 2);
-                b2Vec2 first = last;
-                for (int angle = 1; angle <= 360; angle++) {
-                    b2Vec2 point = AngleAndDistance_To(x, y, angle, rad / 2);
-                    SDL_SetRenderDrawColor(rend, color.r, color.g, color.b, color.a);
-                    SDL_RenderDrawLine(rend, last.x, last.y, point.x, point.y);
-                    last = point;
-                }
-            }
-            void Fill_Circle(int x, int y, int rad, SDL_Color color, int layer = GAME_LAYER) {
-                if (layer == GAME_LAYER) {
-                    x -= cam.x;
-                    y -= cam.y;
-                }
-
-                b2Vec2 last = AngleAndDistance_To(x, y, 0, rad / 2);
-                b2Vec2 first = last;
-                for (int angle = 1; angle <= 360; angle++) {
-                    b2Vec2 point = AngleAndDistance_To(x, y, angle, rad / 2);
-
-                    std::vector<SDL_Vertex> vertexArray {
-                        {{last.x, last.y }, color, { point.x, point.y }},
-                        { {point.x, point.y },	color, { static_cast<float> (x), static_cast<float> (y) } },
-                        { {static_cast<float> (x), static_cast<float> (y)},	color, {last.x, last.y} },
-                    };
-
-                    // Now you can use vertexArray in your SDL_RenderGeometry function call
-                    SDL_RenderGeometry(rend, NULL, vertexArray.data(), 3, NULL, 0);
-
-                    last = point;
-                }
-            }
-
-            // draw and fill a non convex polygon shape
-            void Draw_Polygon(std::vector<b2Vec2> v, SDL_Color c, int x = 0, int y = 0) {
-                if (v.size() < 2) return;
-
-                b2Vec2 first = v[0];
-                b2Vec2 previous = first;
-
-                for (size_t i = 1; i < v.size(); i++) {
-                    b2Vec2 current = v[i];
-                    Draw_Line(previous.x + x, previous.y + y, current.x + x, current.y + y, c);
-                    previous = current;
-                }
-
-                // Connect the last point to the first one to close the shape
-                Draw_Line(previous.x + x, previous.y + y, first.x + x, first.y + y, c);
-
-            }
-            void Fill_Polygon(const std::vector<b2Vec2> vertices, const SDL_Color color) {
-                int n = vertices.size();
-
-                SDL_Vertex* verts = new SDL_Vertex[n];
-                for (int i = 0; i < n; i++) {
-                    verts[i].position.x = vertices[i].x;
-                    verts[i].position.y = vertices[i].y;
-                    verts[i].color = color;
-                }
-
-                int* indices = new int[(n - 2) * 3];
-                for (int i = 1; i < n - 1; i++) {
-                    indices[3 * (i - 1)] = 0;
-                    indices[3 * i - 2] = i;
-                    indices[3 * i - 1] = i + 1;
-                }
-
-                SDL_RenderGeometry(rend, NULL, verts, n, indices, (n - 2) * 3);
-                delete indices;
-                delete verts;
-            }
-
-
-            // draw text on the screen. you must have a font downloaded
-            void Draw_String(int x, int y, int size, double angle, std::string text, std::string f, SDL_Color color) {
-                TTF_Font* font = TTF_OpenFont(f.c_str(), size);
-                if (!rend || !font) {
-                    std::cerr << "Renderer or font is invalid." << std::endl;
-                    return;
-                }
-
-                // Create a transformation matrix for rotating the text
-                SDL_Point center = { x, y };
-                SDL_Rect textRect = { 0, 0, 0, 0 };
-                SDL_Surface* textSurface = nullptr;
-                SDL_Texture* textTexture = nullptr;
-
-                // Rotate the text
-                if (angle != 0.0) {
-                    SDL_Surface* tempSurface = TTF_RenderText_Solid(font, text.c_str(), color);
-                    if (!tempSurface) {
-                        std::cerr << "Text rendering failed: " << TTF_GetError() << std::endl;
-                        return;
-                    }
-
-                    SDL_Texture* tempTexture = SDL_CreateTextureFromSurface(rend, tempSurface);
-                    SDL_FreeSurface(tempSurface);
-                    if (!tempTexture) {
-                        std::cerr << "Texture creation failed: " << SDL_GetError() << std::endl;
-                        return;
-                    }
-
-                    SDL_QueryTexture(tempTexture, nullptr, nullptr, &textRect.w, &textRect.h);
-
-                    SDL_SetRenderTarget(rend, nullptr);
-
-                    SDL_RenderCopyEx(rend, tempTexture, nullptr, &textRect, angle, &center, SDL_FLIP_NONE);
-
-                    SDL_DestroyTexture(tempTexture);
-                }
-                else {
-                    textSurface = TTF_RenderText_Solid(font, text.c_str(), color);
-                    if (!textSurface) {
-                        std::cerr << "Text rendering failed: " << TTF_GetError() << std::endl;
-                        return;
-                    }
-
-                    textTexture = SDL_CreateTextureFromSurface(rend, textSurface);
-                    if (!textTexture) {
-                        std::cerr << "Texture creation failed: " << SDL_GetError() << std::endl;
-                        return;
-                    }
-
-                    SDL_QueryTexture(textTexture, nullptr, nullptr, &textRect.w, &textRect.h);
-                }
-
-                textRect.x = x;
-                textRect.y = y;
-                textRect.w = int(size * textRect.w / textRect.h);
-                textRect.h = size;
-
-                SDL_RenderCopyEx(rend, textTexture, nullptr, &textRect, angle, &center, SDL_FLIP_NONE);
-
-                SDL_DestroyTexture(textTexture);
-                SDL_FreeSurface(textSurface);
-            }
-
-            // draw a sprite sheet animation
-            void Draw_Animation(int x, int y, int w, int h, double angle, animation* an, int displayOrder = 99999, int layer = GAME_LAYER, SDL_RendererFlip flip = SDL_FLIP_NONE) {
-                double frameDuration = an->duration / an->frameCount;
-                an->elapsedTime += dt;
-                int NextFrame = an->currentFrame + 1;
-                std::cout << "current frame: " << an->currentFrame << "\n";
-
-                Draw_Frame(an->currentFrame, x, y, w, h, angle, an, displayOrder, layer, flip);
-
-                if (an->elapsedTime >= frameDuration * NextFrame) an->currentFrame++;
-                if (an->elapsedTime >= an->duration) {
-                    an->currentFrame = 0;
-                    an->elapsedTime = 0;
-                }
-
-            }
-            void Draw_Frame(int frameIndex, int x, int y, int w, int h, double angle, animation* an, int displayOrder = 99999, int game_layer = GAME_LAYER, SDL_RendererFlip flip = SDL_FLIP_NONE) {
-                if (frameIndex >= an->frameCount) return;
-
-                int frameWidth = an->sheetW / an->coloumnCount;
-                int frameHeight = an->sheetH / an->rowCount;
-
-                // Calculate the position of the frame on the sprite sheet based on frameIndex
-                int frameX = (frameIndex % an->coloumnCount) * frameWidth;
-                int frameY = (frameIndex / an->coloumnCount) * frameHeight;
-
-                // Calculate the scaled frame width and height based on w and h arguments
-                int scaledFrameWidth = w;
-                int scaledFrameHeight = h;
-
-                SDL_Rect r = { frameX, frameY, frameWidth, frameHeight };
-
-                // Call Draw_Sprite to draw the frame from the sprite sheet with the specified w and h
-                Draw_Sprite(x, y, scaledFrameWidth, scaledFrameHeight, angle, an->file, displayOrder, game_layer, flip, r);
-            }
-
-            //---------------------------
-            //           OTHER          |
-            //---------------------------
-
-            // get events that are not already detected by the class
-            bool Event_Loop() {
-                static int iteration = 0;
-                if (iteration == events.size()) {
-                    iteration = 0;
-                    return false;
-                }
-                event = events[iteration];
-                iteration++;
-
-                event.window.windowID = SDL_GetWindowID(win);
-                return true;
-            }
-
-            // event that you got from the Event_Loop() function
-            SDL_Event event;
-
-            // game camera, this only affects sprites and shapes tagged with GAME_OBJECT
-            camera cam = { 0,0,W,H };
-
-            void Close() { running = false; }
 
         protected:
 
-            // sprites to load
-            std::vector<_sprite> sprites = {};
 
             SDL_Event ev;
             std::vector<SDL_Event> events;
@@ -2272,32 +2297,6 @@ namespace ogf {
                 lastFrameEndTime = SDL_GetTicks() / 1000.0;
             }
 
-            void _Draw_Sprite(int x, int y, int width, int height, double angle, std::string file, SDL_Rect sorcrect = { 10,10,9,9 }, SDL_RendererFlip flip = SDL_FLIP_NONE) {
-
-                SDL_Texture* spriteTexture = SDL_CreateTextureFromSurface(rend, SDL_LoadBMP(file.c_str()));
-                SDL_Rect srcRect = { 0, 0, width, height };
-
-                if (sorcrect.x != 10 && sorcrect.y != 10 && sorcrect.w != 9 && sorcrect.h != 9) srcRect = sorcrect;
-                SDL_Rect destRect = { x, y, width, height };
-
-                if (!spriteTexture) {
-                    SDL_Log("Unable to load sprite texture: %s", SDL_GetError());
-                }
-
-                SDL_RenderCopyEx(rend, spriteTexture, &srcRect, &destRect, angle, NULL, flip);
-                // Optionally use 'layer' argument for layer-specific logic
-            }
-
-            bool CompareSprites(_sprite* sprite1, _sprite* sprite2) {
-                return sprite1->displayOrder > sprite2->displayOrder;
-            }
-            void SortSprites() {
-                std::sort(sprites.begin(), sprites.end(), [](const _sprite& a, const _sprite& b) {
-                    return a.displayOrder > b.displayOrder;
-                    });
-            }
-
-
             double lastFrameEndTime = 0.0;
 
             double FPS() {
@@ -2325,6 +2324,7 @@ namespace ogf {
             }
 
         };
+        
     }
 
     namespace Physics {
@@ -2512,13 +2512,13 @@ namespace ogf {
                     sprite = t->spr;
                 em = emit;
                 switch (c_type) {
-                case CIRCLE_TYPE:
+                case CIRCLE_SHAPE:
                     Define_Circle(_x, _y, w / 2, (M_PI * w * w) / mass, b_type);
                     break;
-                case RECT_TYPE:
+                case RECT_SHAPE:
                     Define_Box(_x, _y, w, h, w * h / mass, b_type);
                     break;
-                case POLYGON_TYPE:
+                case POLYGON_SHAPE:
                     Define_Polygon(_x, _y, t->points, w * h / mass, b_type);
                 }
                 Set_Pos(_x, _y);
@@ -2544,8 +2544,8 @@ namespace ogf {
                     Set_Solid(emHasCollided);
                     body->SetUserData(this);
 
-                    define();
                 }
+                
             }
 
             // constructor as a function
@@ -2561,13 +2561,13 @@ namespace ogf {
                     sprite = t->spr;
 
                 switch (c_type) {
-                case CIRCLE_TYPE:
+                case CIRCLE_SHAPE:
                     Define_Circle(_x, _y, w / 2, (M_PI * w * w) / mass, b_type);
                     break;
-                case RECT_TYPE:
+                case RECT_SHAPE:
                     Define_Box(_x, _y, w, h, w * h / mass, b_type);
                     break;
-                case POLYGON_TYPE:
+                case POLYGON_SHAPE:
                     Define_Polygon(_x, _y, t->points, w * h / mass, b_type);
                 }
                 Set_Pos(_x, _y);
@@ -2595,9 +2595,8 @@ namespace ogf {
                 }
                 body->SetUserData(this);
 
-                define();
             }
-            virtual void define() {}
+            
             // Member Variables
             type* Type = nullptr;
             int c_type = 0;
@@ -2635,7 +2634,7 @@ namespace ogf {
             }
 
             void Set_Dimensions(double nw, double nh) {
-                if (Type->c_type == POLYGON_TYPE || Type->c_type == RECT_TYPE) {
+                if (Type->c_type == POLYGON_SHAPE || Type->c_type == RECT_SHAPE) {
                     double wm = nw / Get_Dimensions().w;
                     double hm = nh / Get_Dimensions().h;
                     std::vector<b2Vec2> po;
@@ -2653,7 +2652,7 @@ namespace ogf {
             dimension Get_Dimensions() {
                 dimension out;
                 
-                if (Type->c_type != CIRCLE_TYPE) {
+                if (Type->c_type != CIRCLE_SHAPE) {
                     double sx = 9999999999;
                     double sy = 9999999999;
                     double bx = -9999999999;
@@ -2738,7 +2737,7 @@ namespace ogf {
 
             // get the points of the shape
             std::vector<b2Vec2> Get_Shape_Points() {
-                if (Type->c_type == CIRCLE_TYPE) return {};
+                if (Type->c_type == CIRCLE_SHAPE) return {};
                 std::vector<b2Vec2> out;
                 b2Shape* sh = body->GetFixtureList()->GetShape();
                 b2PolygonShape* shape;
@@ -2757,7 +2756,7 @@ namespace ogf {
                 raycast out;
 
                 b2Vec2 s = AngleAndDistance_To(Get_Center().x, Get_Center().y, angle, dist);
-                if (Type->c_type == CIRCLE_TYPE) s = AngleAndDistance_To(Get_Pos().x, Get_Pos().y, angle, dist);
+                if (Type->c_type == CIRCLE_SHAPE) s = AngleAndDistance_To(Get_Pos().x, Get_Pos().y, angle, dist);
 
                 out.x = s.x;
                 out.y = s.y;
@@ -2800,7 +2799,7 @@ namespace ogf {
                 raycast out;
 
                 b2Vec2 s = AngleAndDistance_To(Get_Center().x, Get_Center().y, angle, dist);
-                if (Type->c_type == CIRCLE_TYPE) s = AngleAndDistance_To(Get_Pos().x, Get_Pos().y, angle, dist);
+                if (Type->c_type == CIRCLE_SHAPE) s = AngleAndDistance_To(Get_Pos().x, Get_Pos().y, angle, dist);
 
                 out.x = s.x;
                 out.y = s.y;
@@ -2843,14 +2842,14 @@ namespace ogf {
                 
                 double angle = Angle_To(Get_Center().x, Get_Center().y, s.x, s.y);
                 double length = Distance_To(Get_Center().x, Get_Center().y, s.x, s.y);
-                if (Type->c_type == CIRCLE_TYPE) length = Distance_To(Get_Pos().x, Get_Pos().y, s.x, s.y);
+                if (Type->c_type == CIRCLE_SHAPE) length = Distance_To(Get_Pos().x, Get_Pos().y, s.x, s.y);
                 return RayCast(length, angle, to, stop, Draw, color);
             }
             raycast RayCast(b2Vec2 s, b2Body* to, bool stop, bool Draw, SDL_Color color = ORANGE) {
 
                 double angle = Angle_To(Get_Center().x, Get_Center().y, s.x, s.y);
                 double length = Distance_To(Get_Center().x, Get_Center().y, s.x, s.y);
-                if (Type->c_type == CIRCLE_TYPE) length = Distance_To(Get_Pos().x, Get_Pos().y, s.x, s.y);
+                if (Type->c_type == CIRCLE_SHAPE) length = Distance_To(Get_Pos().x, Get_Pos().y, s.x, s.y);
                 return RayCast(length, angle, to, stop, Draw, color);
             }
 
@@ -2893,7 +2892,7 @@ namespace ogf {
             b2Vec2 Set_Camera(camera* cam) {
                 cam->x = Get_Center().x - cam->wW / 2;
                 cam->y = Get_Center().y - cam->wH / 2;
-                if (Type->c_type == CIRCLE_TYPE) {
+                if (Type->c_type == CIRCLE_SHAPE) {
                     cam->x = Get_Pos().x - cam->wW / 2;
                     cam->y = Get_Pos().y - cam->wH / 2;
                 }
@@ -2909,7 +2908,7 @@ namespace ogf {
                 // Get position
                 float32 x = body->GetPosition().x - Get_Dimensions().w / 64;
                 float32 y = -body->GetPosition().y - Get_Dimensions().h / 64;
-                if (Type->c_type == CIRCLE_TYPE) {
+                if (Type->c_type == CIRCLE_SHAPE) {
                     x = body->GetPosition().x;
                     y = -body->GetPosition().y;
                 }
@@ -3117,46 +3116,9 @@ namespace ogf {
             
             //  update the window, and its values
             bool Run()  {
-                // events
-                Get_Events();
-                // delta time
-                dt = Get_DT();
-
-                // fps cap
-                Cap_FPS((max_FPS == 0 ? 2000 : max_FPS));
-
-                // mouse lock
-                if (m_lock) {
-                    SDL_SetRelativeMouseMode(SDL_TRUE);
-                    int x, y;
-
-                    SDL_GetRelativeMouseState(&x, &y);
-                    m_x += x;
-                    m_y += y;
-                }
-                else {
-                    SDL_SetRelativeMouseMode(SDL_FALSE);
-                }
-
-                // zoom
-                double z = cam.zoom / 100;
-                SDL_RenderSetScale(rend, z, z);
-
-                // window size
-                SDL_GetWindowSize(win, &W, &H);
-
-                // fullscreen
-                if (fullscreen) {
-                    SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN);
-                    if (k_escape_pressed) fullscreen = false;
-                }
-                else {
-                    SDL_SetWindowFullscreen(win, 0);
-                }
-
-                // show cursor
-                SDL_ShowCursor(m_show);
-
+                
+                // pause or update the game world
+                if (!paused) world->Step(dt + 0.02, 6, 2);
                 // draw bodies
                 for (b2Body* i = world->GetBodyList(); i; i = i->GetNext()) {
                     Obj* o = reinterpret_cast<Obj*> (i->GetUserData());
@@ -3169,62 +3131,20 @@ namespace ogf {
                     }
 
                     if (o->sprite != "NULL" && o->body != nullptr) {
-                        if (o->c_type != CIRCLE_TYPE) {
-                            if (o->anim == nullptr) Draw_Sprite(ceil(o->Get_Pos().x) + 32, ceil(o->Get_Pos().y) + 32, o->Get_Dimensions().w, o->Get_Dimensions().h, o->Get_Angle() * (180 / M_PI), o->sprite, o->DisplayOrder, GAME_LAYER, o->flip);
+                        if (o->c_type != CIRCLE_SHAPE) {
+                            if (o->anim == nullptr) Draw_Sprite(ceil(o->Get_Pos().x) + 32, ceil(o->Get_Pos().y) + 32, o->Get_Dimensions().w, o->Get_Dimensions().h, o->Get_Angle() * (180 / M_PI), o->sprite, { 10,10,9,9 }, GAME_LAYER, o->DisplayOrder, o->flip);
                             else Draw_Animation(ceil(o->Get_Pos().x), ceil(o->Get_Pos().y), o->Get_Dimensions().w, o->Get_Dimensions().h, o->Get_Angle() * (180 / M_PI), o->anim, o->DisplayOrder, GAME_LAYER, o->flip);
                         }
                         else {
                             if (o->anim == nullptr) Draw_Sprite(o->Get_Pos().x + o->Get_Dimensions().rad, o->Get_Pos().y + o->Get_Dimensions().rad, -o->Get_Dimensions().rad * 2, -o->Get_Dimensions().rad * 2, o->Get_Angle() * (180 / M_PI), "player.bmp");
                             else Draw_Animation(o->Get_Pos().x + o->Get_Dimensions().rad, o->Get_Pos().y + o->Get_Dimensions().rad, -o->Get_Dimensions().rad * 2, -o->Get_Dimensions().rad * 2, o->Get_Angle() * (180 / M_PI), o->anim, o->DisplayOrder, GAME_LAYER, o->flip);
-                            
+
                         }
                         }
                 
                 }
+                No_Physics::Window::Run();
 
-                // mouse pos
-                if (!m_lock) SDL_GetMouseState(&m_x, &m_y);
-
-                // get fps
-                fps = FPS();
-
-                // pause or update the game world
-                if (!paused) world->Step(dt + 0.02, 6, 2);
-
-                // window title
-                std::string new_name = (!display_FPS ? name : name + "    fps: " + std::to_string(fps));
-                SDL_SetWindowTitle(win, new_name.c_str());
-
-                // sort the sprites based on a display order
-                SortSprites();
-
-                // draw sprites and bodies
-                for (int i = 0; i < sprites.size(); i++) {
-                    _sprite s = sprites[i];
-                    if (s.gameLayer == UI_LAYER) _Draw_Sprite(s.x, s.y, s.w, s.h, s.angle * (-1), s.spr, s.dst, s.flip);
-                }
-                for (int i = 0; i < sprites.size(); i++) {
-                    _sprite s = sprites[i];
-                    if (s.gameLayer == GAME_LAYER) _Draw_Sprite(s.x, s.y, s.w, s.h, s.angle * (-1), s.spr, s.dst, s.flip);
-                }
-                for (int i = 0; i < sprites.size(); i++) {
-                    _sprite s = sprites[i];
-                    if (s.gameLayer == UI_LAYER) _Draw_Sprite(s.x, s.y, s.w, s.h, s.angle * (-1), s.spr, s.dst, s.flip);
-                }
-
-                // update the window
-                SDL_RenderPresent(rend);
-
-
-                // clear the window
-                if (clear) {
-                    Clear();
-                }
-                sprites = {};
-                if (!running) {
-                    SDL_DestroyWindow(win);
-                    SDL_DestroyRenderer(rend);
-                }
                 Update();
                 return running;
             }
@@ -3295,7 +3215,7 @@ namespace ogf {
     
 
     //------------------------
-    //       functions       |
+    //       functions       | 
     //------------------------
 
     // blend two colors together. add a factor as a third argument, and the closer it is to 0, the closer the color is to color 1, factor can only be from 0 to 1
