@@ -916,3 +916,2039 @@ class Window
 	key k_0 = {SDLK_0};
 	key k_1 = {SDLK_1};
 	key k_2 = {SDLK_2};
+	key k_3 = {SDLK_3};
+	key k_4 = {SDLK_4};
+	key k_5 = {SDLK_5};
+	key k_6 = {SDLK_6};
+	key k_7 = {SDLK_7};
+	key k_8 = {SDLK_8};
+	key k_9 = {SDLK_9};
+	key k_up = {SDLK_UP};
+	key k_down = {SDLK_DOWN};
+	key k_left = {SDLK_LEFT};
+	key k_right = {SDLK_RIGHT};
+	mouse m;
+
+	SDL_Renderer *Get_Renderer();
+	SDL_Window *Get_Window();
+	camera *Get_Camera();
+	void Set_Color(SDL_Color c);
+	void Set_Title(std::string t);
+	std::vector<SDL_Event> Get_Event_List();
+	bool Is_Running();
+	void Set_Fullscreen(bool a);
+	void Set_FPS_Display(bool a);
+	bool clear = true;
+	std::vector<Side> sortSides(std::vector<Point> points, std::vector<Side> &sides, Point offset)
+	{
+		// Sort the sides vector based on depth using the compareSides function
+		std::sort(sides.begin(), sides.end(), [points](Side &a, Side &b) {
+			return a.Get_Center(points).z < b.Get_Center(points).z;
+		});
+		return sides;
+	}
+	
+  private:
+	int FOV = 15;
+	void Reset_Events();
+	void Get_Events();
+	SDL_Rect Merge_Rectangles(SDL_Rect *rect1, SDL_Rect *rect2);
+
+	bool fullscreen = false;
+	bool display_FPS = false;
+	SDL_Window *window = nullptr;
+	int W = 2;
+	int H = 2;
+	camera cam = {W, H};
+	std::string name = "window";
+	SDL_Renderer *renderer = nullptr;
+	int fps = 0;
+	double dt = 0;
+	int max_FPS = 0;
+	SDL_Color color = {255, 255, 255, 255};
+	
+	std::vector<_texture> textures;
+	std::vector<SDL_Event> events;
+	bool running = true;
+
+	SDL_Event ev;
+
+	double lastfps = 0;
+	double lastFrameEndTime = 0.0;
+	bool didstart = false;
+	SDL_Event event;
+	bool getkbEvents = true;
+
+	cube __cube;
+};
+} // namespace No_Physics
+
+class Voxel_Model
+{
+  public:
+	double X = 0, Y = 0, Z = 0;
+
+	int scale = 100;
+
+	void Set_Pos(Point p)
+	{
+		Point pos = {x, y, z};
+		center = center + p - pos;
+		x = p.x, y = p.y, z = p.z;
+	}
+
+	Point Get_Pos()
+	{
+		return {x, y, z};
+	}
+	bool DoCameraOffset = true;
+
+	void Save(const std::string &filename)
+	{
+		std::ofstream file(filename + ".vox");
+		if (!file.is_open())
+		{
+			std::cerr << "Error: Unable to open the file for writing." << std::endl;
+			return;
+		}
+
+		file << "VOX"
+			 << "\n";
+		for (Voxel v : list)
+		{
+			file << '{' + std::to_string(v.x) + ',' + std::to_string(v.y) + ',' + std::to_string(v.z) + ',' + std::to_string(v.color.r) + ',' + std::to_string(v.color.g) + ',' + std::to_string(v.color.b) + ',' + std::to_string(v.color.a) + "}\n";
+		}
+		file.close();
+	}
+	void Load(const std::string &filename)
+	{
+		std::string out;
+		std::ifstream file(filename + ".vox");
+		if (!file.is_open())
+		{
+			std::cerr << "Error: Unable to open the file for reading." << std::endl;
+			return;
+		}
+
+		bool did1 = false;
+		std::string line;
+		list.clear();
+		while (std::getline(file, line))
+		{
+			if (!did1 && line != "VOX")
+			{
+				// Error handling for missing "VOX" at the beginning of the file
+				return;
+			}
+			did1 = true;
+
+			// Check if the line starts with '{' and ends with '}'
+			if (line.front() == '{' && line.back() == '}')
+			{
+				// Remove the '{' and '}' characters from the line
+				line = line.substr(1, line.size() - 2);
+
+				std::stringstream ss(line);
+				std::vector<double> numbers;
+				double num;
+
+				// Read numbers separated by commas from the stringstream
+				while (ss >> num)
+				{
+					numbers.push_back(num);
+
+					// Ignore the comma delimiter
+					if (ss.peek() == ',')
+						ss.ignore();
+				}
+				std::cout << numbers[0] << '\n';
+				// Check if the correct number of values were extracted
+				if (numbers.size() == 6)
+				{
+					// Add the voxel using the extracted numbers
+					list.push_back(Voxel(numbers[0], numbers[1], numbers[2], {static_cast<uint8>(numbers[3]), static_cast<uint8>(255), static_cast<uint8>(255)}));
+				}
+			}
+		}
+		file.close();
+		return;
+	}
+
+	Voxel_Model(std::vector<Voxel> l) : list(l)
+	{
+		for (int a = 0; a < l.size(); a++)
+			list[a].voxels = &list;
+	}
+
+	void Draw(No_Physics::Window *a)
+	{
+		std::sort(list.begin(), list.end(), [](Voxel a, Voxel b) {
+			return a.Get_Center(a.points).z > b.Get_Center(b.points).z;
+		});
+		for (int vi = 0; vi < list.size(); vi++)
+		{
+			Voxel v = list[vi];
+			v.vm = this;
+			Point pos;
+			Point vmpos = {x, y, z};
+			Point Vpos = {(double)v.x, (double)v.y, (double)v.z};
+
+			pos = vmpos + Vpos * scale * 2;
+
+			Point offset;
+			if (DoCameraOffset)
+				offset = a->Get_Camera()->Get_Pos();
+			else
+				offset = {0, 0, 0};
+
+			a->Draw_Cube(scale, pos, X, Y, Z, v.color, offset, center, &v);
+			list[vi] = v;
+			list[vi].voxels = &list;
+		}
+		if (!_centerdone)
+		{
+			_centerdone = true;
+			center = Get_Center();
+		}
+	}
+	void Set_Light(Light *l)
+	{
+		light = l;
+		for (int i = 0; i < list.size(); i++)
+		{
+			list[i].light = l;
+		}
+	}
+	Light *Get_Light() { return light; }
+
+  private:
+	Light *light = nullptr;
+	Point center = Point(0, 0, 0);
+	bool _centerdone = false;
+	std::vector<Voxel> list;
+
+	Point Get_Center()
+	{
+		double minX = 9999999;
+		double maxX = -99999999;
+		double minY = 99999999;
+		double maxY = -99999999;
+		double minZ = 99999999;
+		double maxZ = -99999999;
+
+		for (Voxel v : list)
+		{
+			for (Point p : v.points)
+			{
+				minX = std::min(minX, p.x);
+				minY = std::min(minY, p.y);
+				minZ = std::min(minZ, p.z);
+				maxX = std::max(maxX, p.x);
+				maxY = std::max(maxY, p.y);
+				maxZ = std::max(maxZ, p.z);
+			}
+		}
+
+		// Calculate the center position
+		int centerX = (minX + maxX) / 2;
+		int centerY = (minY + maxY) / 2;
+		int centerZ = (minZ + maxZ) / 2;
+
+		return Point(centerX, centerY, centerZ);
+	}
+	double x = 400, y = 400, z = 0;
+};
+
+//------------------------
+//      functions         |
+//------------------------
+
+Point Rotate_Around(Point p, Point rot, Point center)
+{
+	Matrix m = getRotationMatrix(rot.x, rot.y, rot.z);
+	p = translate({-center.x, -center.y, -center.z}, p);
+	p = transform(m, p);
+	p = translate(center, p);
+	return p;
+}
+
+// blend two colors together. add a factor as a third argument, and the closer it is to 0, the closer the color is to color 1, factor can only be from 0 to 1
+SDL_Color Blend_color(const SDL_Color color1, const SDL_Color color2, float factor = 0.5f, Uint8 alpha = 0)
+{
+	// Ensure the factor is within the range [0, 1]
+	factor = (factor > 1.0f ? 1.0f : (factor < 0.0f ? 0.0f : factor));
+
+	// Calculate the blended color component-wise
+	Uint8 r = static_cast<Uint8>((1.0f - factor) * color1.r + factor * color2.r);
+	Uint8 g = static_cast<Uint8>((1.0f - factor) * color1.g + factor * color2.g);
+	Uint8 b = static_cast<Uint8>((1.0f - factor) * color1.b + factor * color2.b);
+	Uint8 a = static_cast<Uint8>((1.0f - factor) * color1.a + factor * color2.a);
+
+	SDL_Color blendedColor = {r, g, b, (alpha == 0 ? a : alpha)};
+	return blendedColor;
+}
+SDL_Texture *Load_Sprite(SDL_Renderer *renderer, std::string file)
+{
+	SDL_Surface *img = IMG_Load(file.c_str());
+	if (img == NULL)
+	{
+		fprintf(stderr, "IMG_Load Error: %s\n", IMG_GetError());
+		return NULL;
+	}
+	SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, img);
+	SDL_FreeSurface(img);
+	if (texture == NULL)
+	{
+		fprintf(stderr, "SDL_CreateTextureFromSurface Error: %s\n", SDL_GetError());
+		return NULL;
+	}
+	return texture;
+}
+
+// play sound
+#if __windowS__
+#define void Play_Sound(std::string file)
+{
+	// Build the mciSendString command to open and play the sound file
+	std::string command = "open \"" + file + "\" type mpegvideo alias mySound";
+	mciSendStringA(command.c_str(), NULL, 0, NULL);
+
+	// Play the sound
+	mciSendStringA("play mySound", NULL, 0, NULL);
+}
+#endif
+//---------------------
+//        MATH          |
+//---------------------
+
+float Angle_To(int p1x, int p1y, int p2x, int p2y)
+{
+	int deltaY = p2y - p1y;
+	int deltaX = p2x - p1x;
+
+	float angleInDegrees = atan2(deltaY, deltaX) * 180 / M_PI;
+
+	return angleInDegrees;
+}
+float Angle_To(Point p1, Point p2)
+{
+	int deltaY = p2.y - p1.y;
+	int deltaX = p2.x - p1.x;
+
+	float angleInDegrees = atan2(deltaY, deltaX) * 180 / M_PI;
+
+	return angleInDegrees;
+}
+Point Angle_To3D(const Point p1, const Point p2)
+{
+	double angle_x = Angle_To(p1.z, p1.y, p2.z, p2.y);
+	double angle_y = Angle_To(p1.x, p1.z, p2.x, p2.z);
+	double angle_z = Angle_To(p1.x, p1.y, p2.x, p2.y);
+
+	return Point(angle_x, angle_y, angle_z);
+}
+double Distance_To(int x, int y, int x1, int y1)
+{
+	int a = x1 - x;
+	int b = y1 - y;
+	int c = sqrt(a * a + b * b);
+	return abs(c);
+}
+double Distance_To(Point p1, Point p2)
+{
+	int a = p2.x - p1.x;
+	int b = p2.y - p1.y;
+	int c = sqrt(a * a + b * b);
+	return abs(c);
+}
+Point AngleAndDistance_To(double x, double y, double angle, double distance)
+{
+	// Convert angle from degrees to radians
+	double radians = angle * M_PI / 180.0;
+
+	// Calculate the destination coordinates as doubles
+	double dx = distance * cos(radians);
+	double dy = distance * sin(radians);
+
+	return {dx + x, dy + y};
+}
+Point AngleAndDistance_To3D(Point p, Point angle, double distance)
+{
+	Point out;
+	out = AngleAndDistance_To(p.x, p.y, angle.z, distance);
+	out.z = AngleAndDistance_To(p.x, p.z, angle.y, distance).y;
+	return out;
+}
+int Random(int num1, int num2)
+{
+	std::random_device dev;
+	std::default_random_engine gen{dev()};
+	std::uniform_int_distribution<int> dis{num1, num2};
+	return dis(gen);
+}
+
+SDL_Color Random_Color()
+{
+	SDL_Color color = {static_cast<Uint8>(Random(0, 255)), static_cast<Uint8>(Random(0, 255)), static_cast<Uint8>(Random(0, 255)), 255};
+	return color;
+}
+
+double Time_Function(void func())
+{
+	Timer t;
+	func();
+	return t.Get_Time();
+}
+
+//----------------------
+//     save/load         |
+//----------------------
+std::string Load(const std::string &filename)
+{
+	std::string out;
+	std::ifstream file(filename);
+	if (!file.is_open())
+	{
+		std::cerr << "Error: Unable to open the file for reading." << std::endl;
+		return "NULL";
+	}
+
+	std::string line;
+
+	while (std::getline(file, line))
+	{
+		out += line + "\n"; // Read each line and append it to the content
+	}
+
+	file.close();
+	return out;
+}
+bool Save(std::string content, const std::string &filename)
+{
+	std::ofstream file(filename);
+	if (!file.is_open())
+	{
+		std::cerr << "Error: Unable to open the file for writing." << std::endl;
+		return false;
+	}
+
+	file << content; // Write content to the file
+	file.close();
+	return true;
+}
+
+bool Clear_File(const std::string &filename)
+{
+	std::ofstream file(filename, std::ios::trunc); // Open the file in truncation mode
+
+	if (!file.is_open())
+	{
+		std::cerr << "Error: Unable to open the file for clearing." << std::endl;
+		return false;
+	}
+
+	file.close();
+	return true;
+}
+
+//---------------------
+//       other       |
+//---------------------
+
+double cast(double val, double min, double max)
+{
+	return (val >= max ? max : val <= min ? min : val);
+}
+
+std::vector<std::vector<SDL_Color>> bmp_To_Vector(std::string Path)
+{
+	SDL_Surface *surface = SDL_LoadBMP(Path.c_str());
+	if (!surface)
+	{
+		// Handle error
+		return {};
+	}
+
+	std::vector<std::vector<SDL_Color>> pixelData(surface->h,
+												  std::vector<SDL_Color>(surface->w));
+
+	for (int y = 0; y < surface->h; ++y)
+	{
+		for (int x = 0; x < surface->w; ++x)
+		{
+			Uint32 pixel = *((Uint32 *)surface->pixels + y * surface->w + x);
+			Uint8 r, g, b, a;
+			SDL_GetRGBA(pixel, surface->format, &r, &g, &b, &a);
+			pixelData[y][x] = {r, g, b, a};
+		}
+	}
+
+	SDL_FreeSurface(surface);
+	return pixelData;
+}
+
+#if __windowS__
+#define char *vector_To_Bmp(const std::vector<std::vector<SDL_Color>> &pixelData, std::string location, std::string name)
+{
+	int width = pixelData[0].size();
+	int height = pixelData.size();
+	SDL_Surface *surface = SDL_CreateRGBSurface(0, width, height, 32, 0xFF000000,
+												0x00FF0000, 0x0000FF00, 0x000000FF);
+	if (!surface)
+	{
+		SDL_Log("Unable to create surface: %s", SDL_GetError());
+		return nullptr;
+	}
+	for (int y = 0; y < height; ++y)
+	{
+		for (int x = 0; x < width; ++x)
+		{
+			SDL_Color color = pixelData[y][x];
+			Uint32 pixelValue = SDL_MapRGBA(surface->format, color.r, color.g, color.b,
+											color.a);
+			*((Uint32 *)surface->pixels + y * width + x) = pixelValue;
+		}
+	}
+
+	std::string fileName = location + name + ".bmp";
+
+	if (SDL_SaveBMP(surface, fileName.c_str()) != 0)
+	{
+		SDL_Log("Unable to save BMP: %s", SDL_GetError());
+		SDL_FreeSurface(surface);
+		return nullptr;
+	}
+
+	SDL_FreeSurface(surface);
+
+	// Convert the file name to char* and return
+	char *charFileName = new char[fileName.size() + 1];
+	strcpy_s(charFileName, fileName.size() + 1, fileName.c_str());
+	return charFileName;
+}
+#endif
+
+double Distance_To3D(Point p1, Point p2)
+{
+	double dx = p2.x - p1.x;
+	double dy = p2.y - p1.y;
+	double dz = p2.z - p1.z;
+	return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+bool Is_Inside(Point point, std::vector<Point> shape)
+{
+	int crossings = 0;
+	int numPoints = shape.size();
+
+	for (int i = 0; i < numPoints; ++i)
+	{
+		int next = (i + 1) % numPoints;
+		if (((shape[i].y <= point.y) && (shape[next].y > point.y)) ||
+			((shape[i].y > point.y) && (shape[next].y <= point.y)))
+		{
+			double vt = (point.y - shape[i].y) / (shape[next].y - shape[i].y);
+			if (point.x < shape[i].x + vt * (shape[next].x - shape[i].x))
+			{
+				crossings++;
+			}
+		}
+	}
+
+	return (crossings % 2 != 0);
+}
+bool Is_Inside3D(Point point, const std::vector<Point> &shape)
+{
+	// Project shape vertices onto each axis
+	std::vector<Point> xyProjection;
+	std::vector<Point> xzProjection;
+	std::vector<Point> yzProjection;
+
+	for (const auto &vertex : shape)
+	{
+		xyProjection.push_back({vertex.x, vertex.y, 0});
+		xzProjection.push_back({vertex.x, vertex.z, 0});
+		yzProjection.push_back({vertex.y, vertex.z, 0});
+	}
+
+	// Check if the point is inside the projected shapes
+	bool insideXY = Is_Inside({point.x, point.y, 0}, xyProjection);
+	bool insideXZ = Is_Inside({point.x, point.z, 0}, xzProjection);
+	bool insideYZ = Is_Inside({point.y, point.z, 0}, yzProjection);
+
+	// If the point is inside all three projections, it's inside the 3D shape (cube)
+	return insideXY && insideXZ && insideYZ;
+}
+//------------------------
+//       EASES             |
+//------------------------
+double SineIn(double A)
+{
+	return 1 - cos((A / 100) * M_PI / 2);
+}
+double SineOut(double A)
+{
+	return std::sin((A / 100) * M_PI / 2);
+}
+double SineInOut(double A)
+{
+	return -(std::cos(M_PI * (A / 100)) - 1) / 2;
+}
+double CubicIn(double A)
+{
+	return std::pow(A / 100, 3);
+}
+double CubicOut(double A)
+{
+	return 1 - std::pow(1 - A / 100, 3);
+}
+double CubicInOut(double A)
+{
+	return (A / 100) < 0.5 ? 4 * std::pow(A / 100, 3) : 1 - std::pow(-2 * (A / 100) + 2, 3) / 2;
+}
+double QuintIn(double A)
+{
+	return std::pow(A / 100, 5);
+}
+double QuintOut(double A)
+{
+	return 1 - std::pow(1 - A / 100, 5);
+}
+double QuintInOut(double A)
+{
+	return (A / 100) < 0.5 ? 16 * std::pow(A / 100, 5) : 1 - std::pow(-2 * (A / 100) + 2, 5) / 2;
+}
+double CircIn(double A)
+{
+	return 1 - std::sqrt(1 - std::pow(A / 100, 2));
+}
+double CircOut(double A)
+{
+	return std::sqrt(1 - std::pow(A / 100 - 1, 2));
+}
+double CircInOut(double A)
+{
+	return (A / 100) < 0.5 ? (1 - std::sqrt(1 - std::pow(2 * (A / 100), 2))) / 2 : (std::sqrt(1 - std::pow(-2 * (A / 100) + 2, 2)) + 1) / 2;
+}
+double ElasticIn(double A)
+{
+	double c4 = (2 * M_PI) / 3;
+	return (A / 100) == 0 ? 0 : (A / 100) == 1 ? 1 : -std::pow(2, 10 * (A / 100) - 10) * std::sin(((A / 100) * 10 - 10.75) * c4);
+}
+double ElasticOut(double A)
+{
+	double c4 = (2 * M_PI) / 3;
+	return (A / 100) == 0 ? 0 : (A / 100) == 1 ? 1 : std::pow(2, -10 * (A / 100)) * std::sin(((A / 100) * 10 - 0.75) * c4) + 1;
+}
+double ElasticInOut(double A)
+{
+	double c5 = (2 * M_PI) / 4.5;
+	return (A / 100) == 0 ? 0 : (A / 100) == 1 ? 1 : (A / 100) < 0.5 ? -(std::pow(2, 20 * (A / 100) - 10) * std::sin((20 * (A / 100) - 11.125) * c5)) / 2 : (std::pow(2, -20 * (A / 100) + 10) * std::sin((20 * (A / 100) - 11.125) * c5)) / 2 + 1;
+}
+double QuadIn(double A)
+{
+	return std::pow(A / 100, 2);
+}
+double QuadOut(double A)
+{
+	return 1 - (1 - A / 100) * (1 - A / 100);
+}
+double QuadInOut(double A)
+{
+	return (A / 100) < 0.5 ? 2 * std::pow(A / 100, 2) : 1 - std::pow(-2 * (A / 100) + 2, 2) / 2;
+}
+double QuartIn(double A)
+{
+	return std::pow(A / 100, 4);
+}
+double QuartOut(double A)
+{
+	return 1 - std::pow(1 - A / 100, 4);
+}
+double QuartInOut(double A)
+{
+	return (A / 100) < 0.5 ? 8 * std::pow(A / 100, 4) : 1 - std::pow(-2 * (A / 100) + 2, 4) / 2;
+}
+double ExpoIn(double A)
+{
+	return (A / 100) == 0 ? 0 : std::pow(2, 10 * (A / 100) - 10);
+}
+double ExpoOut(double A)
+{
+	return (A / 100) == 1 ? 1 : 1 - std::pow(2, -10 * (A / 100));
+}
+double ExpoInOut(double A)
+{
+	return (A / 100) == 0 ? 0 : (A / 100) == 1 ? 1 : (A / 100) < 0.5 ? std::pow(2, 20 * (A / 100) - 10) / 2 : (2 - std::pow(2, -20 * (A / 100) + 10)) / 2;
+}
+double BackIn(double A)
+{
+	double c1 = 1.70158;
+	double c3 = c1 + 1;
+	return c3 * std::pow(A / 100, 3) - c1 * std::pow(A / 100, 2);
+}
+double BackOut(double A)
+{
+	double c1 = 1.70158;
+	double c3 = c1 + 1;
+	return 1 + c3 * std::pow(A / 100 - 1, 3) + c1 * std::pow(A / 100 - 1, 2);
+}
+double BackInOut(double A)
+{
+	double c1 = 1.70158;
+	double c2 = c1 * 1.525;
+	return (A / 100) < 0.5 ? (std::pow(2 * (A / 100), 2) * ((c2 + 1) * 2 * (A / 100) - c2)) / 2 : (std::pow(2 * (A / 100) - 2, 2) * ((c2 + 1) * ((A / 100) * 2 - 2) + c2) + 2) / 2;
+}
+double BounceOut(double A)
+{
+	double n1 = 7.5625;
+	double d1 = 2.75;
+	if (A < 1 / d1)
+	{
+		return n1 * A * A;
+	}
+	else if (A < 2 / d1)
+	{
+		return n1 * (A - 1.5 / d1) * A + 0.75;
+	}
+	else if (A < 2.5 / d1)
+	{
+		return n1 * (A - 2.25 / d1) * A + 0.9375;
+	}
+	else
+	{
+		return n1 * (A - 2.625 / d1) * A + 0.984375;
+	}
+}
+double BounceIn(double A)
+{
+	return 1 - BounceOut(1 - A);
+}
+double BounceInOut(double A)
+{
+	return A < 0.5 ? (1 - BounceOut(1 - 2 * A)) / 2 : (1 + BounceOut(2 * A - 1)) / 2;
+}
+
+//--------------------------------
+//.          DEFINITIONS.       |
+//--------------------------------
+inline dimensions button::Get_Dimensions()
+{
+	return {w, h};
+}
+inline void button::Set_Dimensions(int _w, int _h)
+{
+	w = _w;
+	h = _h;
+}
+inline Point button::Get_Pos()
+{
+	return {(double)x, (double)y};
+}
+inline void button::Set_Pos(int _x, int _y)
+{
+	x = _x;
+	y = _y;
+}
+inline bool button::Is_Pressed()
+{
+	return pressed;
+}
+inline button::button(int _x, int _y, int _w, int _h)
+{
+	x = _x;
+	y = _y;
+	w = _w;
+	h = _h;
+}
+inline bool button::Calculate(int mx, int my, bool clicking)
+{
+	pressed = (mx > x and mx < x + w and my > y and my < y + h) && clicking;
+	return pressed;
+}
+inline double Ease::Get_Elapsed()
+{
+	return elapsed;
+}
+inline bool Ease::Is_Done()
+{
+	return done;
+}
+inline Ease::Ease(double atime, double afrom, double ato, int amode)
+{
+	time = atime;
+	from = afrom;
+	to = ato;
+	mode = amode;
+	Reset();
+}
+
+inline double Ease::Get_Ease()
+{
+	elapsed = (SDL_GetTicks() - TimeAtStart) / 1000;
+	if (time <= 0.0)
+	{
+		std::cerr << "Error: Total duration must be greater than zero." << std::endl;
+		return 0.0;
+	}
+
+	// Ensure elapsedTime is within the valid range [0, totalDuration]
+	elapsed = ((elapsed < time ? elapsed : time) < 0.0 ? 0.0 : (elapsed < time ? elapsed : time));
+	if (elapsed == time)
+		done = true;
+
+	// Calculate A as a percentage of elapsed time over total duration
+	double A = (elapsed / time) * 100.0;
+	double B = from;
+	double C = to;
+	int D = mode;
+	switch (D - 1)
+	{
+	case 0:
+		return (((C - B) / 100) * A) + B;
+	case 1:
+		return B + ((SineIn(A)) * (C - B));
+	case 2:
+		return B + (SineOut(A) * (C - B));
+	case 3:
+		return B + ((SineInOut(A)) * (C - B));
+	case 4:
+		return B + (CubicIn(A) * (C - B));
+	case 5:
+		return B + (CubicOut(A) * (C - B));
+	case 6:
+		return B + (CubicInOut(A) * (C - B));
+	case 7:
+		return B + (QuintIn(A) * (C - B));
+	case 8:
+		return B + (QuintOut(A) * (C - B));
+	case 9:
+		return B + (QuintInOut(A) * (C - B));
+	case 10:
+		return B + (CircIn(A) * (C - B));
+	case 11:
+		return B + (CircOut(A) * (C - B));
+	case 12:
+		return B + (CircInOut(A) * (C - B));
+	case 13:
+		return B + (ElasticIn(A) * (C - B));
+	case 14:
+		return B + (ElasticOut(A) * (C - B));
+	case 15:
+		return B + (ElasticInOut(A) * (C - B));
+	case 16:
+		return B + (QuadIn(A) * (C - B));
+	case 17:
+		return B + (QuadOut(A) * (C - B));
+	case 18:
+		return B + (QuadInOut(A) * (C - B));
+	case 19:
+		return B + (QuartIn(A) * (C - B));
+	case 20:
+		return B + (QuartOut(A) * (C - B));
+	case 21:
+		return B + (QuartInOut(A) * (C - B));
+	case 22:
+		return B + (ExpoIn(A) * (C - B));
+	case 23:
+		return B + (ExpoOut(A) * (C - B));
+	case 24:
+		return B + (ExpoInOut(A) * (C - B));
+	case 25:
+		return B + (BackIn(A) * (C - B));
+	case 26:
+		return B + (BackOut(A) * (C - B));
+	case 27:
+		return B + (BackInOut(A) * (C - B));
+	case 28:
+		return B + ((BounceIn(A / 100)) * (C - B));
+	case 29:
+		return B + ((BounceOut(A / 100)) * (C - B));
+	case 30:
+		return B + ((BounceInOut(A / 100)) * (C - B));
+	default:
+		return 0;
+	}
+}
+// MADE BY JR01
+inline void Ease::Reset()
+{
+	TimeAtStart = SDL_GetTicks();
+	done = false;
+}
+
+inline Timer::Timer()
+{
+	Restart();
+}
+inline void Timer::Restart()
+{
+	startTime = std::chrono::high_resolution_clock::now();
+}
+inline double Timer::Get_Time() const
+{
+	auto currentTime = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double> elapsedTime = currentTime - startTime;
+	return elapsedTime.count();
+}
+inline animation::animation(std::string f, int rC, int cC, int _sheetW, int _sheetH, double dur)
+{
+	file = f;
+	rowCount = rC;
+	coloumnCount = cC;
+	sheetW = _sheetW;
+	sheetH = _sheetH;
+	duration = dur;
+	frameCount = rowCount * coloumnCount;
+}
+
+inline Sprite_Stack::Sprite_Stack(std::string f, int rC, int cC, int _height, int _sheetW, int _sheetH)
+{
+	spr = f;
+	rowCount = rC;
+	coloumnCount = cC;
+	sheetW = _sheetW;
+	sheetH = _sheetH;
+	height = _height;
+	frameCount = rowCount * coloumnCount;
+	height = frameCount;
+}
+inline std::vector<_layer *> Sprite_Stack::operator+(Sprite_Stack b)
+{
+	for (_layer *i : b.stack)
+		stack.push_back(i);
+	return stack;
+}
+inline void Sprite_Stack::Load_Stack(SDL_Renderer *renderer)
+{
+	for (int frameIndex = 0; frameIndex < frameCount; frameIndex++)
+	{
+		int frameWidth = sheetW / coloumnCount;
+		int frameHeight = sheetH / rowCount;
+
+		int frameX = (frameIndex % coloumnCount) * frameWidth;
+		int frameY = (frameIndex % rowCount) * frameHeight;
+
+		SDL_Rect r = {frameX * 0, frameY * 0, frameWidth, frameHeight};
+		stack.push_back(new _layer(Load_Sprite(renderer, spr), &r));
+	}
+}
+inline void Sprite_Stack::Set_Animation(std::vector<animation *> a)
+{
+	anim = a;
+}
+inline void Sprite_Stack::Delete_Animation()
+{
+	anim = {};
+}
+
+inline Point camera::Get_Pos()
+{
+	return pos;
+}
+inline void camera::Set_Pos(Point p)
+{
+	pos = p;
+}
+inline void camera::Set_Zoom(double z)
+{
+	zoom = z;
+}
+inline camera::camera(int WW, int WH)
+{
+	wW = WW;
+	wH = WH;
+}
+
+inline key::key(_keycode c)
+{
+	c = code;
+}
+inline bool key::Check(SDL_Event *e)
+{
+	if (!isMouseKey)
+	{
+		if (!(e->key.keysym.sym == code.keyboardcode))
+			return false;
+		if (e->type == SDL_KEYDOWN)
+		{
+			if (e->key.keysym.sym == code.keyboardcode)
+			{
+				pressed = true;
+				held = true;
+
+				allowed = false;
+				released = false;
+			}
+		}
+		if (e->type == SDL_KEYUP)
+		{
+			if (e->key.keysym.sym == code.keyboardcode)
+			{
+				pressed = false;
+				held = false;
+
+				allowed = true;
+				released = true;
+			}
+		}
+	}
+	else
+	{
+		if (!(e->key.keysym.sym == code.mousecode))
+			return false;
+
+		if (e->type == SDL_MOUSEBUTTONDOWN && e->key.keysym.sym == code.mousecode)
+		{
+			pressed = true;
+			held = true;
+
+			allowed = false;
+			released = false;
+		}
+		if (e->type == SDL_MOUSEBUTTONUP && e->key.keysym.sym == code.mousecode)
+		{
+			pressed = false;
+			held = false;
+
+			allowed = true;
+			released = true;
+		}
+		return e->key.keysym.sym == code.mousecode;
+	}
+	return false;
+}
+inline void key::Reset()
+{
+	pressed = false;
+	released = false;
+}
+inline bool key::Pressed()
+{
+	return pressed;
+}
+inline bool key::Released()
+{
+	return released;
+}
+inline bool key::Held()
+{
+	return held;
+}
+inline bool mouse::Check(SDL_Event *e)
+{
+	if (e->type == SDL_MOUSEWHEEL)
+		wheel_x = e->wheel.x, wheel_y = e->wheel.y;
+	left.Check(e);
+	right.Check(e);
+	int _x = (int)x, _y = (int)y;
+	SDL_GetMouseState(&_x, &_y);
+	x = _x, y = _y;
+	pos = {x, y};
+	return (left.Check(e) || right.Check(e));
+}
+inline void mouse::Reset()
+{
+	left.Reset();
+	right.Reset();
+}
+inline Point mouse::Get_Wheel()
+{
+	return {(wheel_x), (wheel_y)};
+}
+inline void mouse::Set_Lock(bool a)
+{
+	lock = a;
+}
+inline void mouse::Set_Show(bool a)
+{
+	show = a;
+}
+_texture::_texture(int X, int Y, int W, int H, double Angle, SDL_Texture *_texture, SDL_Rect dest,
+				   Layer gamel)
+{
+	texture = _texture;
+	x = X;
+	y = Y;
+	w = W;
+	h = H;
+	angle = Angle;
+	layer = gamel;
+	dst = dest;
+}
+
+inline bool No_Physics::Window::operator==(Window o)
+{
+	return window == o.window;
+}
+
+inline No_Physics::Window::Window(std::string _name, int _W, int _H, Uint32 flags)
+{
+	if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
+	{
+		SDL_Log("Unable to initialize SDL: %s", SDL_GetError());
+		return;
+	}
+	SDL_DisplayMode DM;
+	SDL_GetCurrentDisplayMode(0, &DM);
+	if (Get_OS() == ANDROID)
+		window = SDL_CreateWindow(_name.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, DM.w, DM.h, flags | SHOWN);
+	else
+		window = SDL_CreateWindow(_name.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, _W, _H, flags | SHOWN);
+	name = _name;
+	if (!window)
+	{
+		SDL_Log("Failed to create window: %s", SDL_GetError());
+		SDL_Quit();
+		return;
+	}
+
+	TTF_Init();
+	renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+	if (!renderer)
+	{
+		SDL_Log("Failed to create renderer: %s", SDL_GetError());
+		SDL_DestroyWindow(window);
+		SDL_Quit();
+		return;
+	}
+	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+	
+	W = _W;
+	H = _H;
+	cam.wW = W;
+	cam.wH = H;
+}
+
+inline void No_Physics::Window::_Start() {}
+inline bool No_Physics::Window::_Run()
+{
+	if (!didstart)
+	{
+		Start();
+		didstart = true;
+	}
+	Update();
+	// events
+	Get_Events();
+	// delta time
+	dt = Get_DT();
+
+	// fps cap
+	Set_MaxFPS((max_FPS == 0 ? 2000 : max_FPS));
+	if (Get_OS() != ANDROID)
+	{
+		// mouse lock
+		if (m.lock)
+		{
+			SDL_SetRelativeMouseMode(SDL_TRUE);
+			int x, y;
+
+			SDL_GetRelativeMouseState(&x, &y);
+			m.x += y;
+			m.y += y;
+		}
+		else
+		{
+			SDL_SetRelativeMouseMode(SDL_FALSE);
+		}
+
+		// window size
+		SDL_GetWindowSize(window, &W, &H);
+
+		// fullscreen
+		if (fullscreen)
+		{
+			SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN);
+			if (k_escape.Pressed())
+				fullscreen = false;
+		}
+		else
+		{
+			SDL_SetWindowFullscreen(window, 0);
+		}
+
+		// show cursor
+		SDL_ShowCursor(m.show);
+
+		// mouse pos
+		if (!m.lock)
+		{
+			int x, y;
+			SDL_GetMouseState(&x, &y);
+			m.x = x,
+			m.y = y;
+		}
+	}
+	// get fps
+	fps = Get_FPS();
+	// zoom
+	double z = cam.zoom / 100;
+	SDL_RenderSetScale(renderer, z, z);
+
+	// window title
+	std::string new_name = (!display_FPS ? name : name + "   fps: " + std::to_string(fps));
+	SDL_SetWindowTitle(window, new_name.c_str());
+
+	// sort the sprites based on a display order
+	// draw sprites
+	std::sort(
+		textures.begin(), textures.end(), [](_texture a, _texture b) {
+			if (a.layer == BG_LAYER)
+			{
+				if (b.layer == BG_LAYER)
+					return true;
+				if (b.layer == GAME_LAYER)
+					return true;
+				if (b.layer == UI_LAYER)
+					return true;
+			}
+
+			if (a.layer == GAME_LAYER)
+			{
+				if (b.layer == BG_LAYER)
+					return false;
+				if (b.layer == GAME_LAYER)
+					return true;
+				if (b.layer == UI_LAYER)
+					return true;
+			}
+			if (a.layer == UI_LAYER)
+			{
+				if (b.layer == BG_LAYER)
+					return false;
+				if (b.layer == GAME_LAYER)
+					return false;
+				if (b.layer == UI_LAYER)
+					return true;
+			}
+			return false;
+		});
+
+	for (_texture i : textures)
+	{
+		SDL_Rect src = {i.x, i.y, i.w, i.h};
+		if (i.layer == BG_LAYER)
+			SDL_RenderCopyEx(renderer, i.texture, &i.dst, &src,
+							 i.angle, NULL, i.flip);
+		if (i.layer == GAME_LAYER)
+
+			SDL_RenderCopyEx(renderer, i.texture, &i.dst, &src,
+							 i.angle, NULL, i.flip);
+
+		if (i.layer == UI_LAYER)
+
+			SDL_RenderCopyEx(renderer, i.texture, &i.dst, &src,
+							 i.angle, NULL, i.flip);
+	}
+	// update the window
+	SDL_RenderPresent(renderer);
+
+	// clear the window
+	if (clear)
+	{
+		Clear();
+	}
+
+	textures = {};
+	if (!running)
+	{
+		SDL_DestroyWindow(window);
+		SDL_DestroyRenderer(renderer);
+	}
+	return running;
+}
+inline dimensions No_Physics::Window::Get_Dimensions()
+{
+	SDL_DisplayMode dm;
+	SDL_GetCurrentDisplayMode(0, &dm);
+	return {dm.w, dm.h};
+}
+inline void No_Physics::Window::Set_Icon(std::string file)
+{
+	SDL_Surface *s = SDL_LoadBMP(file.c_str());
+	SDL_SetWindowIcon(window, s);
+}
+inline bool No_Physics::Window::inView(Point i, int viewBufferPixels)
+{
+	return (i.x > W + viewBufferPixels || i.x < 0 - viewBufferPixels || i.y > H + viewBufferPixels || i.y < 0 - viewBufferPixels);
+}
+inline void No_Physics::Window::Allow_Keyboard_Events(bool a)
+{
+	getkbEvents = a;
+}
+inline void No_Physics::Window::Draw_String(int x, int y, int size, double angle, std::string text, std::string f,
+											SDL_Color color)
+{
+	TTF_Font *font = TTF_OpenFont(f.c_str(), size);
+	if (!renderer || !font)
+	{
+		std::cerr << "renderer or font is invalid." << std::endl;
+		return;
+	}
+
+	// Create a transformation matrix for rotating the text
+	SDL_Point center = {x, y};
+	SDL_Rect textRect = {0, 0, 0, 0};
+	SDL_Surface *textSurface = nullptr;
+	SDL_Texture *textTexture = nullptr;
+
+	// Rotate the text
+	if (angle != 0.0)
+	{
+		SDL_Surface *tempSurface = TTF_RenderText_Solid(font, text.c_str(), color);
+		if (!tempSurface)
+		{
+			std::cerr << "Text rendererering failed: " << TTF_GetError() << std::endl;
+			return;
+		}
+
+		SDL_Texture *tempTexture = SDL_CreateTextureFromSurface(renderer,
+																tempSurface);
+		SDL_FreeSurface(tempSurface);
+		if (!tempTexture)
+		{
+			std::cerr << "Texture creation failed: " << SDL_GetError() << std::endl;
+			return;
+		}
+
+		SDL_QueryTexture(tempTexture, nullptr, nullptr, &textRect.w, &textRect.h);
+
+		SDL_SetRenderTarget(renderer, nullptr);
+
+		SDL_RenderCopyEx(renderer,
+						 tempTexture,
+						 nullptr,
+						 &textRect,
+						 angle,
+						 &center,
+						 SDL_FLIP_NONE);
+
+		SDL_DestroyTexture(tempTexture);
+	}
+	else
+	{
+		textSurface = TTF_RenderText_Solid(font, text.c_str(), color);
+		if (!textSurface)
+		{
+			std::cerr << "Text rendererering failed: " << TTF_GetError() << std::endl;
+			return;
+		}
+
+		textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+		if (!textTexture)
+		{
+			std::cerr << "Texture creation failed: " << SDL_GetError() << std::endl;
+			return;
+		}
+
+		SDL_QueryTexture(textTexture, nullptr, nullptr, &textRect.w, &textRect.h);
+	}
+
+	textRect.x = x;
+	textRect.y = y;
+	textRect.w = int(size * textRect.w / textRect.h);
+	textRect.h = size;
+
+	SDL_RenderCopyEx(renderer, textTexture, nullptr, &textRect, angle, &center,
+					 SDL_FLIP_NONE);
+	SDL_DestroyTexture(textTexture);
+	SDL_FreeSurface(textSurface);
+}
+
+inline void No_Physics::Window::Fill_Triangle(Point _p1, Point _p2, Point _p3, SDL_Color color, Point offset)
+{
+	offset.x += W / 2;
+	offset.y += H / 2;
+	// Calculate intersection point of lines formed by p1-p2 and p1-p3 float intersection_x = p1.x + (p2.y - p1.y) * (p3.x - p1.x) / (p3.y - p1.y); float intersection_y = p2.y;// Sort vertices by y-coordinate
+	FOV = 250;
+
+	_p1 = offset + (_p1 * FOV) / (_p1.z + 10 * FOV + offset.z);
+	_p2 = offset + (_p2 * FOV) / (_p2.z + 10 * FOV + offset.z);
+	_p3 = offset + (_p3 * FOV) / (_p3.z + 10 * FOV + offset.z);
+
+	SDL_Point p1 = _p1.To_SDL();
+	SDL_Point p2 = _p2.To_SDL();
+	SDL_Point p3 = _p3.To_SDL();
+
+	if (p1.y > p2.y)
+		std::swap(p1, p2);
+	if (p1.y > p3.y)
+		std::swap(p1, p3);
+	if (p2.y > p3.y)
+		std::swap(p2, p3);
+
+	float intersection_y = p2.y;
+
+	// Initialize scanline start and end
+	int scanline_start = static_cast<int>(p1.y);
+	int scanline_end = static_cast<int>(std::max(p2.y, p3.y));
+
+	for (int y = scanline_start; y <= scanline_end; y++)
+	{
+		int px1, px2;
+		if (y <= intersection_y)
+		{
+			// Above or at the intersection point
+			px1 = p1.x + (y - p1.y) * (p2.x - p1.x) / (p2.y - p1.y);
+			px2 = (y <= p2.y) ? p1.x + (y - p1.y) * (p3.x - p1.x) / (p3.y - p1.y) : p2.x + (y - p2.y) * (p3.x - p2.x) / (p3.y - p2.y);
+		}
+		else
+		{
+			// Below the intersection point
+			px1 = p1.x + (y - p1.y) * (p3.x - p1.x) / (p3.y - p1.y);
+			px2 = p2.x + (y - p2.y) * (p3.x - p2.x) / (p3.y - p2.y);
+		}
+
+		// Ensure px1 is on the left of px2
+		if (px1 > px2)
+			std::swap(px1, px2);
+		
+		Draw_Line({(double)px1 - 1, (double)y}, {(double)px2 + 1, (double)y}, color);
+	}
+}
+
+inline SDL_Rect No_Physics::Window::Get_String_Rect(int x, int y, int size, double angle, std::string text,
+													std::string f, SDL_Color color)
+{
+	TTF_Font *font = TTF_OpenFont(f.c_str(), size);
+	if (!renderer || !font)
+	{
+		std::cerr << "renderer or font is invalid." << std::endl;
+		return {0, 0, 0, 0};
+	}
+	// Create a transformation matrix for rotating the text
+	SDL_Point center = {x, y};
+	SDL_Rect textRect = {0, 0, 0, 0};
+	SDL_Surface *textSurface = nullptr;
+	SDL_Texture *textTexture = nullptr;
+
+	// Rotate the text
+	if (angle != 0.0)
+	{
+		SDL_Surface *tempSurface = TTF_RenderText_Solid(font, text.c_str(), color);
+		if (!tempSurface)
+		{
+			std::cerr << "Text rendererering failed: " << TTF_GetError() << std::endl;
+			return {0, 0, 0, 0};
+		}
+
+		SDL_Texture *tempTexture = SDL_CreateTextureFromSurface(renderer,
+																tempSurface);
+		SDL_FreeSurface(tempSurface);
+		if (!tempTexture)
+		{
+			std::cerr << "Texture creation failed: " << SDL_GetError() << std::endl;
+			return {0, 0, 0, 0};
+		}
+
+		SDL_QueryTexture(tempTexture, nullptr, nullptr, &textRect.w, &textRect.h);
+
+		SDL_SetRenderTarget(renderer, nullptr);
+
+		SDL_RenderCopyEx(renderer, tempTexture, nullptr, &textRect, angle, &center,
+						 SDL_FLIP_NONE);
+
+		SDL_DestroyTexture(tempTexture);
+	}
+	else
+	{
+		textSurface = TTF_RenderText_Solid(font, text.c_str(), color);
+		if (!textSurface)
+		{
+			std::cerr << "Text rendererering failed: " << TTF_GetError() << std::endl;
+			return {0, 0, 0, 0};
+		}
+
+		textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+		if (!textTexture)
+		{
+			std::cerr << "Texture creation failed: " << SDL_GetError() << std::endl;
+			return {0, 0, 0, 0};
+		}
+
+		SDL_QueryTexture(textTexture, nullptr, nullptr, &textRect.w, &textRect.h);
+	}
+	textRect.x = x;
+	textRect.y = y;
+	textRect.w = int(size * textRect.w / textRect.h);
+	textRect.h = size;
+
+	SDL_DestroyTexture(textTexture);
+	SDL_FreeSurface(textSurface);
+	return textRect;
+}
+inline void No_Physics::Window::Draw(Point p, SDL_Color color)
+{
+	SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+	SDL_RenderDrawPoint(renderer, p.x, p.y);
+}
+
+inline void No_Physics::Window::Draw_Texture(int x, int y, int width, int height, double angle, SDL_Texture *t, SDL_Rect sorcrect, Layer layer, int DisplayOrder, SDL_RendererFlip flip)
+{
+	if (sorcrect.x == 10 && sorcrect.y == 10 && sorcrect.w == 9 && sorcrect.h == 9)
+		sorcrect = {0, 0, W, H};
+	_texture te = {x, y, width, height, angle, t, sorcrect, layer};
+	te.displayOrder = DisplayOrder;
+	te.flip = flip;
+
+	textures.push_back(te);
+}
+inline SDL_Texture *No_Physics::Window::loadImage(const char *path)
+{
+	SDL_Surface *img = IMG_Load(path);
+	if (img == NULL)
+	{
+		fprintf(stderr, "IMG_Load Error: %s\n", IMG_GetError());
+		return NULL;
+	}
+	SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, img);
+	SDL_FreeSurface(img);
+	if (texture == NULL)
+	{
+		fprintf(stderr, "SDL_CreateTextureFromSurface Error: %s\n", SDL_GetError());
+		return NULL;
+	}
+	return texture;
+}
+inline void No_Physics::Window::Draw_Sprite(int x, int y, int width, int height, double angle, std::string file, SDL_Rect sorcrect, Layer layer, int DisplayOrder, SDL_RendererFlip flip)
+{
+	SDL_Texture *spriteTexture = loadImage(file.c_str());
+
+	if (sorcrect.x == 10 && sorcrect.y == 10 && sorcrect.w == 9 && sorcrect.h == 9)
+		sorcrect = {0, 0, W, H};
+
+	_texture te = {x, y, width, height, angle, spriteTexture, sorcrect, layer};
+	te.displayOrder = DisplayOrder;
+	te.flip = flip;
+	textures.push_back(te);
+}
+inline void No_Physics::Window::Draw_Rect(int X, int Y, int W, int H, SDL_Color color)
+{
+	int R = color.r;
+	int G = color.g;
+	int B = color.b;
+	int A = color.a;
+	SDL_Rect squareRect = {X, Y, W, H};
+
+	SDL_SetRenderDrawColor(renderer, R, G, B, A);
+	SDL_RenderDrawRect(renderer, &squareRect);
+}
+
+inline void No_Physics::Window::Draw_Cube(int scale, Point Position, double X, double Y, double Z, SDL_Color color, Point offset, Point center, Voxel *v)
+{
+	// convert angles
+	if (X > 180)
+		X *= M_PI / 360;
+	else if (X != 0)
+		X = X * (M_PI / 360) - 360;
+	if (Y > 180)
+		Y *= M_PI / 360;
+	else if (Y != 0)
+		Y = Y * (M_PI / 360) - 360;
+	if (Z > 180)
+		Z *= M_PI / 360;
+	else if (Z != 0)
+		Z = Z * (M_PI / 360) - 360;
+	Point sc = {(double)W / 2, (double)Y / 2};
+
+	// get rotation
+	__cube.rotationXYZ = getRotationMatrix(X, Y, Z);
+	std::vector<Point> points = __cube._points;
+	int pI = 0;
+	if (center.x == 0 && center.y == 0 && center.z == 0)
+		center = Position;
+	for (Point p : points)
+	{
+		p = (p * scale + Position);
+
+		p = Rotate_Around(p, {X, Y, Z}, center);
+
+		points[pI] = p;
+		pI++;
+	}
+	pI = 0;
+	if (v != nullptr)
+	{
+		v->points = points;
+	}
+
+for (Point p : points)
+	{
+		Point crot = cam.rot;
+		if (crot.x > 180)
+			crot.x *= M_PI / 360;
+		else if (crot.x != 0)
+			crot.x = crot.x * (M_PI / 360) - 360;
+		if (crot.y > 180)
+			crot.y *= M_PI / 360;
+		else if (crot.y != 0)
+			crot.y = crot.y * (M_PI / 360) - 360;
+		if (crot.z > 180)
+			crot.z *= M_PI / 360;
+		else if (crot.z != 0)
+			crot.z = crot.z * (M_PI / 360) - 360;
+			crot.y = 1;
+		p = Rotate_Around(p, crot, {cam.pos.x, cam.pos.y, -(double)FOV});
+		points[pI] = p;
+		pI++;
+	}
+	
+	std::vector<Side> _sides = __cube.sides;
+	_sides = sortSides(points, _sides, offset);
+
+//	for (int i = 0; i < 3; i++)
+//		_sides.pop_back();
+	
+	for (Side s : _sides)
+	{
+		if (v->light != nullptr && true)
+		{
+			Light *light = v->light;
+			Point c = s.Get_Center(points);
+
+			bool hidden = false;
+
+			for (Voxel Vo : *v->voxels)
+			{
+				if (Vo.Get_Center(Vo.points) == v->Get_Center(v->points))
+					continue;
+				Point rp = AngleAndDistance_To3D(c, Angle_To3D(c, {light->x, light->y, light->z}), Distance_To3D(c, Vo.Get_Center(Vo.points)));
+
+				if (Is_Inside3D(rp, Vo.points))
+				{
+					hidden = true;
+					break;
+				}
+			}
+
+			s.color = Blend_color(color, light->color, (Distance_To3D(c, {light->x, light->y, light->z}) / (light->strength / 100) / 170) * (-1) + light->saturation);
+			s.color = Blend_color(s.color, BLACK, (Distance_To3D(c, {light->x, light->y, light->z}) / (light->strength / 100) / 200));
+		}
+		else
+			s.color = color;
+		Point _offset = {0, 0, 0};
+		//offset + sc;
+		Fill_Triangle(points[s.p1], points[s.p2], points[s.p3], s.color, _offset);
+		Fill_Triangle(points[s.p4], points[s.p5], points[s.p6], s.color, _offset);
+	}
+}
+
+inline void No_Physics::Window::Draw_Rect(Point pos, int w, int h, SDL_Color color)
+{
+	int R = color.r;
+	int G = color.g;
+	int B = color.b;
+	int A = color.a;
+	SDL_Rect squareRect = {(int)pos.x, (int)pos.y, w, h};
+
+	SDL_SetRenderDrawColor(renderer, R, G, B, A);
+	SDL_RenderDrawRect(renderer, &squareRect);
+}
+inline void No_Physics::Window::Draw_Line(Point pos, Point pos2, SDL_Color color)
+{
+	pos.x = (pos.x * 25) / (pos.z + 25);
+	int R = color.r;
+	int G = color.g;
+	int B = color.b;
+	int A = color.a;
+	SDL_SetRenderDrawColor(renderer, R, G, B, A);
+	SDL_RenderDrawLine(renderer, pos.x, pos.y, pos2.x, pos2.y);
+}
+
+inline void No_Physics::Window::Fill_Rect(int X, int Y, int W, int H, SDL_Color color)
+{
+	int R = color.r;
+	int G = color.g;
+	int B = color.b;
+	int A = color.a;
+	SDL_Rect squareRect = {X, Y, W, H};
+	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+	SDL_SetRenderDrawColor(renderer, R, G, B, A);
+	SDL_RenderFillRect(renderer, &squareRect);
+}
+inline void No_Physics::Window::Fill_Rect(Point pos, int W, int H, SDL_Color color)
+{
+	int R = color.r;
+	int G = color.g;
+	int B = color.b;
+	int A = color.a;
+	SDL_Rect squareRect = {(int)pos.x, (int)pos.y, W, H};
+
+	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+	SDL_SetRenderDrawColor(renderer, R, G, B, A);
+	SDL_RenderFillRect(renderer, &squareRect);
+	// Optionally use 'layer' argument for layer-specific logic
+}
+inline void No_Physics::Window::Draw_Circle(int x, int y, int rad, SDL_Color color)
+{
+	Point last = AngleAndDistance_To(x, y, 0, rad / 2);
+
+	for (int angle = 1; angle <= 360; angle++)
+	{
+		Point point = AngleAndDistance_To(x, y, angle, rad / 2);
+		SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+		SDL_RenderDrawLine(renderer, last.x, last.y, point.x, point.y);
+		last = point;
+	}
+}
+inline void No_Physics::Window::Draw_Animation(int x, int y, int w, int h, double angle, animation *an, int displayOrder, Layer layer, SDL_RendererFlip flip)
+{
+	double frameDuration = an->duration / an->frameCount;
+	an->elapsedTime += dt;
+	int NextFrame = an->currentFrame + 1;
+
+	Draw_Frame(an->currentFrame, x, y, w, h, angle, an, layer, displayOrder, flip);
+
+	if (an->elapsedTime >= frameDuration * NextFrame)
+		an->currentFrame++;
+	if (an->elapsedTime >= an->duration)
+	{
+		an->currentFrame = 0;
+		an->elapsedTime = 0;
+	}
+}
+inline void No_Physics::Window::Draw_Frame(int frameIndex, int x, int y, int w, int h, double angle, animation *an, Layer layer, int displayOrder, SDL_RendererFlip flip)
+{
+	if (frameIndex >= an->frameCount)
+		return;
+
+	int frameWidth = an->sheetW / an->coloumnCount;
+	int frameHeight = an->sheetH / an->rowCount;
+
+	// Calculate the position of the frame on the sprite sheet based on frameIndex
+	int frameX = (frameIndex % an->coloumnCount) * frameWidth;
+	int frameY = (frameIndex / an->coloumnCount) * frameHeight;
+
+	// Calculate the scaled frame width and height based on w and h arguments
+	int scaledFrameWidth = w;
+	int scaledFrameHeight = h;
+
+	SDL_Rect r = {frameX, frameY, frameWidth, frameHeight};
+
+	// Call Draw_Sprite to draw the frame from the sprite sheet with the specified w and h
+	Draw_Sprite(x, y, scaledFrameWidth, scaledFrameHeight, angle, an->file, r, layer,
+				displayOrder, flip);
+}
+inline void No_Physics::Window::Draw_Sprite_Stack(int x, int y, int w, int h, double angle, Sprite_Stack *s, Layer layer, int displayOrder, SDL_Rect r,
+												  SDL_RendererFlip flip)
+{
+	if (s->anim.empty())
+	{
+		int a = 0;
+		for (_layer *i : s->stack)
+		{
+			Draw_Texture(x, y - s->height / s->frameCount * a, w, h, angle, i->t, {0, 0, W, H}, layer, displayOrder, flip);
+			a++;
+		}
+	}
+	else
+	{
+		for (animation *a : s->anim)
+			Draw_Animation(x, y - s->height / s->frameCount,
+						   w, h, angle, a, displayOrder, layer, flip);
+	}
+	// TODO: fix anim y pos
+}
+inline bool No_Physics::Window::Event_Loop()
+{
+	static int iteration = 0;
+	if (iteration == events.size())
+	{
+		iteration = 0;
+		return false;
+	}
+	event = events[iteration];
+	iteration++;
+
+	event.window.windowID = SDL_GetWindowID(window);
+	return true;
+}
+inline void No_Physics::Window::Close() { running = false; }
+inline void No_Physics::Window::Reset_Events()
+{
+	events = {};
+	// keyboard events
+	k_a.Reset();
+	k_b.Reset();
+	k_c.Reset();
+	k_d.Reset();
+	k_e.Reset();
+	k_f.Reset();
+	k_g.Reset();
+	k_h.Reset();
+	k_i.Reset();
+	k_j.Reset();
+	k_k.Reset();
+	k_l.Reset();
+	k_m.Reset();
+	k_n.Reset();
+	k_o.Reset();
+	k_p.Reset();
+	k_q.Reset();
+	k_r.Reset();
+	k_s.Reset();
+	k_t.Reset();
+	k_u.Reset();
+	k_v.Reset();
+	k_w.Reset();
+	k_x.Reset();
+	k_y.Reset();
+	k_z.Reset();
+	k_space.Reset();
+	k_enter.Reset();
+	k_escape.Reset();
+	k_shift.Reset();
+	k_ctrl.Reset();
+	k_alt.Reset();
+	k_semicolon.Reset();
+	k_apostrophe.Reset();
+	k_period.Reset();
+	k_comma.Reset();
+	k_slash.Reset();
+	k_backslash.Reset();
+	k_asterisk.Reset();
+	k_equals.Reset();
+	k_minus.Reset();
+	k_0.Reset();
+	k_1.Reset();
+	k_2.Reset();
+	k_3.Reset();
+	k_4.Reset();
+	k_5.Reset();
+	k_6.Reset();
+	k_7.Reset();
+	k_8.Reset();
+	k_9.Reset();
+	k_up.Reset();
+	k_down.Reset();
+	k_left.Reset();
+	k_right.Reset();
+	m.Reset();
+}
+inline void No_Physics::Window::Get_Events()
+{
+	Reset_Events();
+	while (SDL_PollEvent(&ev))
+	{
+		if (ev.type == SDL_QUIT)
+			running = false;
+		if (getkbEvents)
+		{
+			if (k_a.Check(&ev))
+				;
+			else if (k_b.Check(&ev))
+				;
+			else if (k_c.Check(&ev))
+				;
+			else if (k_d.Check(&ev))
+				;
+			else if (k_e.Check(&ev))
+				;
+			else if (k_f.Check(&ev))
+				;
+			else if (k_g.Check(&ev))
+				;
+			else if (k_h.Check(&ev))
+				;
+			else if (k_i.Check(&ev))
+				;
+			else if (k_j.Check(&ev))
+				;
+			else if (k_k.Check(&ev))
+				;
+			else if (k_l.Check(&ev))
+				;
+			else if (k_m.Check(&ev))
+				;
+			else if (k_n.Check(&ev))
+				;
+			else if (k_o.Check(&ev))
+				;
+			else if (k_p.Check(&ev))
+				;
+			else if (k_q.Check(&ev))
+				;
+			else if (k_r.Check(&ev))
+				;
+			else if (k_s.Check(&ev))
+				;
+			else if (k_t.Check(&ev))
+				;
+			else if (k_u.Check(&ev))
+				;
+			else if (k_v.Check(&ev))
+				;
+			else if (k_w.Check(&ev))
+				;
+			else if (k_x.Check(&ev))
+				;
+			else if (k_y.Check(&ev))
+				;
+			else if (k_z.Check(&ev))
+				;
+			else if (k_space.Check(&ev))
+				;
+			else if (k_enter.Check(&ev))
+				;
+			else if (k_escape.Check(&ev))
+				;
+			else if (k_shift.Check(&ev))
+				;
+			else if (k_ctrl.Check(&ev))
+				;
+			else if (k_alt.Check(&ev))
+				;
+			else if (k_semicolon.Check(&ev))
+				;
+			else if (k_apostrophe.Check(&ev))
+				;
+			else if (k_period.Check(&ev))
+				;
+			else if (k_comma.Check(&ev))
+				;
+			else if (k_slash.Check(&ev))
+				;
+			else if (k_backslash.Check(&ev))
+				;
+			else if (k_asterisk.Check(&ev))
+				;
+			else if (k_equals.Check(&ev))
+				;
+			else if (k_minus.Check(&ev))
+				;
+			else if (k_0.Check(&ev))
+				;
+			else if (k_1.Check(&ev))
+				;
+			else if (k_2.Check(&ev))
+				;
+			else if (k_3.Check(&ev))
+				;
+			else if (k_4.Check(&ev))
+				;
+			else if (k_5.Check(&ev))
+				;
+			else if (k_6.Check(&ev))
+				;
+			else if (k_7.Check(&ev))
+				;
+			else if (k_8.Check(&ev))
+				;
+			else if (k_9.Check(&ev))
+				;
+			else if (k_up.Check(&ev))
+				;
+			else if (k_down.Check(&ev))
+				;
+			else if (k_left.Check(&ev))
+				;
+			else if (k_right.Check(&ev))
+				;
+			else if (m.Check(&ev))
+				;
+		}
+		else
+			events.push_back(ev);
+	}
+}
+inline void No_Physics::Window::Clear()
+{
+	SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+	SDL_RenderClear(renderer);
+}
+inline SDL_Rect No_Physics::Window::Merge_Rectangles(SDL_Rect *rect1, SDL_Rect *rect2)
+{
+	SDL_Rect mergedRect;
+	mergedRect.x = std::min(rect1->x, rect2->x);
+	mergedRect.y = std::min(rect1->y, rect2->y);
+	mergedRect.w = std::max(rect1->x + rect1->w, rect2->x + rect2->w) - mergedRect.x;
+	mergedRect.h = std::max(rect1->y + rect1->h, rect2->y + rect2->h) - mergedRect.y;
+	return mergedRect;
+}
+inline void No_Physics::Window::Set_MaxFPS(int cap)
+{
+	// Calculate the maximum frame time allowed for the desired FPS
+	double maxFT = 1.0 / cap;
+
+	// Get the time at the end of the frame
+	double frameEndTime = SDL_GetTicks() / 1000.0;
+
+	// Calculate the time it took to process the current frame
+	double frameTime = frameEndTime - lastFrameEndTime;
+
+	// Calculate the delay needed to cap the frame rate (if necessary)
+	double delayTime = maxFT - frameTime;
+
+	// Check if delay is needed and perform it
+	if (delayTime > 0)
+	{
+		SDL_Delay(static_cast<Uint32>(delayTime * 1000.0)); // Convert to milliseconds
+	}
+
+	// Update the time for the end of the next frame
+	lastFrameEndTime = SDL_GetTicks() / 1000.0;
+}
+inline double No_Physics::Window::Get_FPS()
+{
+	static int frameCount = 0;
+	static double lastTime = 0.0;
+	double currentTime = SDL_GetTicks() / 1000.0; // Get current time in seconds
+	frameCount++;
+
+	if (currentTime - lastTime >= 1.0)
+	{
+		double fps = static_cast<double>(frameCount) / (currentTime - lastTime);
+		lastTime = currentTime;
+		frameCount = 0;
+		lastfps = fps; // Update lastFPS when the calculation is done
+	}
+
+	return lastfps; // Return lastFPS, which may be the last calculated FPS or -1.0
+}
+inline double No_Physics::Window::Get_DT()
+{
+	static double lastTime = SDL_GetTicks() / 1000.0;
+	double currentTime = SDL_GetTicks() / 1000.0;
+	double deltaTime = currentTime - lastTime;
+	lastTime = currentTime;
+	return deltaTime;
+}
+inline SDL_Renderer *No_Physics::Window::Get_Renderer()
+{
+	return renderer;
+}
+inline SDL_Window *No_Physics::Window::Get_Window()
+{
+	return window;
+}
+inline camera *No_Physics::Window::Get_Camera()
+{
+	return &cam;
+}
+inline void No_Physics::Window::Set_Color(SDL_Color c)
+{
+	color = c;
+}
+inline void No_Physics::Window::Set_Title(std::string t)
+{
+	name = t;
+}
+inline std::vector<SDL_Event> No_Physics::Window::Get_Event_List()
+{
+	return events;
+}
+inline bool No_Physics::Window::Is_Running()
+{
+	return running;
+}
+inline void No_Physics::Window::Set_Fullscreen(bool a)
+{
+	fullscreen = a;
+}
+inline void No_Physics::Window::Set_FPS_Display(bool a)
+{
+	display_FPS = a;
+}
+
+} // namespace ogf
