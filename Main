@@ -1,0 +1,918 @@
+//------------------------
+//       headers           |
+//------------------------
+// SDL
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_image.h>
+#include <SDL2/SDL_opengles2.h>
+// box2d
+#include "box2d.h"
+//math
+#include <cmath>
+// vector string and I/O
+#include <sstream>
+#include <vector>
+#include <unordered_map>
+#include <string>
+#include <iostream>
+#include <fstream>
+// random
+#include <random>
+// time
+#include <chrono>
+// windows.h
+#if __window32__
+#include <windows.h>
+#pragma comment(lib, "windowmm.lib")
+#endif
+#include <algorithm>
+
+class Point
+{
+  public:
+	double x, y, z;
+
+	Point()
+	{
+		this->x = 0;
+		this->y = 0;
+		this->z = 0;
+	}
+
+	Point(double x, double y, double z)
+	{
+		this->x = x;
+		this->y = y;
+		this->z = z;
+	}
+
+	Point(double x, double y)
+	{
+		this->x = x;
+		this->y = y;
+		this->z = 0;
+	}
+
+	double operator[](int i) const
+	{
+		if (i == 0)
+			return this->x;
+		if (i == 1)
+			return this->y;
+		return this->z;
+	}
+
+	double &operator[](int i)
+	{
+		if (i == 0)
+			return this->x;
+		if (i == 1)
+			return this->y;
+		return this->z;
+	}
+	bool operator==(Point a)
+	{
+		return x == a.x && y == a.y && z == a.z;
+	}
+
+	SDL_Point To_SDL()
+	{
+		return {(int)x, (int)y};
+	}
+	Point operator+(Point a)
+	{
+		return {x + a.x, y + a.y, z + a.z};
+	}
+	Point operator-(Point a)
+	{
+		return {x - a.x, y - a.y, z - a.z};
+	}
+	Point operator*(Point a)
+	{
+		return {x * a.x, y * a.y, z * a.z};
+	}
+	Point operator/(Point a)
+	{
+		return {x / a.x, y / a.y, z / a.z};
+	}
+	Point operator+(double a)
+	{
+		return {x + a, y + a, z + a};
+	}
+	Point operator-(double a)
+	{
+		return {x - a, y - a, z - a};
+	}
+	Point operator*(double a)
+	{
+		return {x * a, y * a, z * a};
+	}
+	Point operator/(double a)
+	{
+		return {x / a, y / a, z / a};
+	}
+};
+
+namespace ogf
+{
+// predefine functions
+float Angle_To(int p1x, int p1y, int p2x, int p2y);
+double Distance_To(int x, int y, int x1, int y1);
+double Distance_To(Point p1, Point p2);
+Point AngleAndDistance_To(int x, int y, double angle, double distance);
+SDL_Texture *Load_Sprite(SDL_Renderer *renderer, std::string file);
+
+//------------------------
+//       colors         |
+//------------------------
+
+// Define commonly used colors
+#define RED            \
+	{                  \
+		255, 0, 0, 255 \
+	}
+#define GREEN          \
+	{                  \
+		0, 255, 0, 255 \
+	}
+#define BLUE           \
+	{                  \
+		0, 0, 255, 255 \
+	}
+#define BLACK        \
+	{                \
+		0, 0, 0, 255 \
+	}
+#define WHITE              \
+	{                      \
+		255, 255, 255, 255 \
+	}
+#define YELLOW           \
+	{                    \
+		255, 255, 0, 255 \
+	}
+#define CYAN             \
+	{                    \
+		0, 255, 255, 255 \
+	}
+#define MAGENTA          \
+	{                    \
+		255, 0, 255, 255 \
+	}
+#define ORANGE           \
+	{                    \
+		255, 165, 0, 255 \
+	}
+#define PURPLE           \
+	{                    \
+		128, 0, 128, 255 \
+	}
+#define PINK               \
+	{                      \
+		255, 192, 203, 255 \
+	}
+#define LIME           \
+	{                  \
+		0, 255, 0, 255 \
+	}
+#define BROWN            \
+	{                    \
+		139, 69, 19, 255 \
+	}
+#define GRAY               \
+	{                      \
+		128, 128, 128, 255 \
+	}
+#define LIGHT_GRAY         \
+	{                      \
+		192, 192, 192, 255 \
+	}
+#define DARK_GRAY       \
+	{                   \
+		64, 64, 64, 255 \
+	}
+#define SILVER             \
+	{                      \
+		192, 192, 192, 255 \
+	}
+#define GOLD             \
+	{                    \
+		255, 215, 0, 255 \
+	}
+#define BEIGE              \
+	{                      \
+		245, 245, 220, 255 \
+	}
+#define INDIGO          \
+	{                   \
+		75, 0, 130, 255 \
+	}
+#define VIOLET           \
+	{                    \
+		148, 0, 211, 255 \
+	}
+#define MAROON         \
+	{                  \
+		128, 0, 0, 255 \
+	}
+#define NAVY           \
+	{                  \
+		0, 0, 128, 255 \
+	}
+#define TEAL             \
+	{                    \
+		0, 128, 128, 255 \
+	}
+#define OLIVE            \
+	{                    \
+		128, 128, 0, 255 \
+	}
+#define SKY_BLUE           \
+	{                      \
+		135, 206, 235, 255 \
+	}
+#define DARK_RED       \
+	{                  \
+		139, 0, 0, 255 \
+	}
+#define DARK_GREEN     \
+	{                  \
+		0, 100, 0, 255 \
+	}
+#define DARK_BLUE      \
+	{                  \
+		0, 0, 139, 255 \
+	}
+#define CYBER_YELLOW     \
+	{                    \
+		255, 255, 0, 128 \
+	}
+#define TURQUOISE         \
+	{                     \
+		64, 224, 208, 255 \
+	}
+#define SALMON             \
+	{                      \
+		250, 128, 114, 255 \
+	}
+#define CORAL             \
+	{                     \
+		255, 127, 80, 255 \
+	}
+#define LAVENDERL          \
+	{                      \
+		230, 230, 250, 255 \
+	}
+#define CHOCOLATE         \
+	{                     \
+		210, 105, 30, 255 \
+	}
+#define TOMATO           \
+	{                    \
+		255, 99, 71, 255 \
+	}
+#define PLUM               \
+	{                      \
+		221, 160, 221, 255 \
+	}
+#define GOLDENROD         \
+	{                     \
+		218, 165, 32, 255 \
+	}
+#define PERU              \
+	{                     \
+		205, 133, 63, 255 \
+	}
+#define DARK_ORCHID       \
+	{                     \
+		153, 50, 204, 255 \
+	}
+#define SPRING_GREEN     \
+	{                    \
+		0, 255, 127, 255 \
+	}
+#define CRIMSON          \
+	{                    \
+		220, 20, 60, 255 \
+	}
+#define FIREBRICK        \
+	{                    \
+		178, 34, 34, 255 \
+	}
+#define PALE_GREEN         \
+	{                      \
+		152, 251, 152, 255 \
+	}
+#define DARK_SLATE_GRAY \
+	{                   \
+		47, 79, 79, 255 \
+	}
+#define MEDIUM_AQUAMARINE  \
+	{                      \
+		102, 205, 170, 255 \
+	}
+
+// define other stuff
+
+//earth gravity
+#define EARTH_GRAVITY \
+	{                 \
+		0, 9.81       \
+	}
+
+// game layers
+enum Layer
+{
+	BG_LAYER = 1,
+	GAME_LAYER = 2,
+	UI_LAYER = 3,
+};
+
+// object shapes
+enum Obj_Shape
+{
+	CIRCLE_SHAPE = 1,
+	RECT_SHAPE = 2,
+	POLYGON_SHAPE = 3,
+};
+
+// pi
+#ifndef M_PI
+#define M_PI = 3.14159265358979323846
+#endif
+
+//window tags
+#define SHOWN SDL_WINDOW_SHOWN				   // you can see the window.
+#define HIDDEN SDL_WINDOW_HIDDEN			   // you can't see the window
+#define FULLSCREEN SDL_WINDOW_FULLSCREEN	   // the window is fullscreen at start
+#define OPENGL SDL_WINDOW_OPENGL			   // define a window that supports openGL
+#define BORDERLESS SDL_WINDOW_BORDERLESS	   // define a window that does not have a border
+#define RESIZABLE SDL_WINDOW_RESIZABLE		   // Create a resizable window.
+#define MINIMIZED SDL_WINDOW_MINIMIZED		   // Create a minimized window.
+#define MAXIMIZED SDL_WINDOW_MAXIMIZED		   // Create a maximized window.
+#define INPUT_GRABBED SDL_WINDOW_INPUT_GRABBED // window has grabbed input focus.
+#define INPUT_FOCUS SDL_WINDOW_INPUT_FOCUS	   // window has input focus.
+#define MOUSE_FOCUS SDL_WINDOW_MOUSE_FOCUS	   // window has mouse focus.
+
+//operating systems, used on the Get_OS() function
+enum OS
+{
+	windowS = 0,
+	LINUX = 1,
+	MAC = 2,
+	ANDROID = 3,
+	IOS = 4,
+	OTHER = 5,
+};
+
+// return the operating system of the device it's running on
+OS Get_OS()
+{
+#ifdef _window32
+	return windowS;
+#elif __linux__
+	return LINUX;
+#elif __APPLE__ && __MACH__
+	return MAC;
+#elif __ANDROID__
+	return ANDROID;
+#elif __APPLE__
+	return IOS;
+#else
+	return OTHER;
+#endif
+}
+
+//------------------------
+//       CLASSES       |
+// -----------------------
+
+struct dimensions
+{
+	int w = 0, h = 0;
+};
+
+// a square button, made for ease of use
+class button
+{
+  public:
+	// constructor. button positions and dimensions
+	button() {}
+	button(int _x, int _y, int _w, int _h);
+	// return: the x and y positions of the button
+	Point Get_Pos();
+	void Set_Pos(int _x, int _y);
+	// return: the width and height of the button
+	dimensions Get_Dimensions();
+	void Set_Dimensions(int _w, int _h);
+	// return: if the button was pressed since last calculation
+	bool Is_Pressed();
+	// calculate if the button is being clicked. mouse positions if the mouse is clicking
+	bool Calculate(int mx, int my, bool clicking);
+
+  private:
+	int x;
+	int y;
+	int w;
+	int h;
+	bool pressed = false;
+};
+// ease.
+class Ease
+{
+  public:
+	// get the elapsed time. (the time since ease start in seconds)
+	double Get_Elapsed();
+	// return: if the easing has finished
+	bool Is_Done();
+	// constructor: time in seconds, from to, mode
+	Ease(double atime, double afrom, double ato, int amode);
+
+	// get the easing value.
+	double Get_Ease();
+	// use this value to restart the ease.
+	void Reset();
+
+  private:
+	double time;
+	double from;
+	double to;
+	int mode;
+	double TimeAtStart;
+	double elapsed;
+	bool done = false;
+};
+
+// a timer, based on real time.
+class Timer
+{
+  public:
+	// the constructor automatically activates Reset()
+	Timer();
+	// restart the timer
+	void Restart();
+
+	double Get_Time() const;
+
+  private:
+	std::chrono::high_resolution_clock::time_point startTime;
+};
+
+struct Sprite_Stack;
+class animation
+{
+  public:
+	animation(std::string f, int rC, int cC, int _sheetW, int _sheetH, double dur);
+
+	std::string file = "NULL";
+	int rowCount = 1;
+	int coloumnCount = 1;
+	int frameCount = 1;
+	int sheetW = 1;
+	int sheetH = 1;
+	double duration;
+	int currentFrame = 0;
+	double elapsedTime = 0;
+};
+
+struct _layer
+{
+	_layer(SDL_Texture *te, SDL_Rect *re) : t(te), r(re) {}
+	SDL_Texture *t;
+	SDL_Rect *r;
+};
+
+class Sprite_Stack
+{
+  public:
+	// constructor. file, row and column count, stack height, sheet width and height.
+	Sprite_Stack(std::string f, int rC, int cC, int _height, int _sheetW, int _sheetH);
+	// use this to layer another stack on top of this one
+	std::vector<_layer *> operator+(Sprite_Stack b);
+
+	// load the stack. necessary after creation.
+	void Load_Stack(SDL_Renderer *renderer);
+	// set a sprite stack animation.
+	void Set_Animation(std::vector<animation *> a);
+	// delete the sprite stack animation.
+	void Delete_Animation();
+
+	std::string spr = "NULL";
+	int rowCount = 1;
+	int coloumnCount = 1;
+	int frameCount = 1;
+	int sheetW = 1;
+	int sheetH = 1;
+	int height = frameCount;
+	std::vector<_layer *> stack = {};
+	std::vector<animation *> anim = {};
+};
+
+class camera
+{
+  public:
+	// constructor. window width and height.
+	camera() {}
+	camera(int WW, int WH);
+	Point Get_Pos();
+	void Set_Pos(Point p);
+	void Set_Zoom(double z);
+
+	Point pos;
+	Point rot;
+	int wW = 1;
+	int wH = 1;
+	double zoom = 100;
+};
+
+struct _texture
+{
+	SDL_Rect dst;
+	SDL_Texture *texture;
+	Layer layer;
+	int x, y, w, h;
+	double angle;
+	SDL_RendererFlip flip = SDL_FLIP_NONE;
+	int displayOrder = 99999;
+	_texture(int X, int Y, int W, int H, double Angle, SDL_Texture *_texture, SDL_Rect dest, Layer game);
+};
+
+struct _keycode
+{
+	int mousecode = 0;
+	SDL_Keycode keyboardcode = SDLK_a;
+	_keycode(int a, bool kb = true)
+	{
+		if (!kb)
+			mousecode = a;
+		else
+			keyboardcode = static_cast<SDL_Keycode>(a);
+	}
+};
+
+class key
+{
+  public:
+	key(_keycode c);
+	bool Check(SDL_Event *e);
+	void Reset();
+
+	bool Pressed();
+	bool Released();
+	bool Held();
+
+  private:
+	bool pressed = false;
+	bool released = false;
+	bool held = false;
+	bool allowed = true;
+	_keycode code = SDLK_a;
+	bool isMouseKey = false;
+};
+
+struct mouse
+{
+	bool Check(SDL_Event *e);
+	void Reset();
+
+	Point Get_Wheel();
+	void Set_Lock(bool a);
+	void Set_Show(bool a);
+
+	key left = {SDL_BUTTON_LEFT};
+	key right = {SDL_BUTTON_RIGHT};
+
+	double x = 0;
+	double y = 0;
+	Point pos = {x, y};
+	double wheel_x = 0;
+	double wheel_y = 0;
+
+	bool lock = false;
+	bool show = true;
+};
+
+struct Light : public Point
+{
+	Light(Point p, int str, SDL_Color c) : Point(p.x, p.y, p.z), strength(str), color(c) {}
+	double strength = 0;
+	SDL_Color color = WHITE;
+	float saturation = 0.7;
+};
+
+typedef std::vector<double> Vector;
+typedef std::vector<Vector> Matrix;
+
+struct Side
+{
+	SDL_Color color = RED;
+
+	int p1;
+	int p2;
+	int p3;
+	int p4;
+	int p5;
+	int p6;
+
+	const std::vector<Point> *points_;
+	Side(const std::vector<Point> *points, SDL_Color col, int a, int b, int c, int d, int e, int f)
+	{
+		color = col;
+		points_ = points;
+		Update(a, b, c, d, e, f);
+	}
+	void Update(int a, int b, int c, int d, int e, int f)
+	{
+		p1 = a,
+		p2 = b,
+		p3 = c,
+		p4 = d;
+		p5 = e;
+		p6 = f;
+	}
+
+	int id = 0;
+	Point Get_Center(std::vector<Point> points)
+	{
+		double minX = 9999999;
+		double maxX = -99999999;
+		double minY = 99999999;
+		double maxY = -99999999;
+		double minZ = 99999999;
+		double maxZ = -99999999;
+		std::vector<int> Indexlist = {p1, p2, p3, p4, p5, p6};
+		for (int i : Indexlist)
+		{
+			Point p = points[i];
+			minX = std::min(minX, p.x);
+			minY = std::min(minY, p.y);
+			minZ = std::min(minZ, p.z);
+			maxX = std::max(maxX, p.x);
+			maxY = std::max(maxY, p.y);
+			maxZ = std::max(maxZ, p.z);
+		}
+
+		// Calculate the center position
+		int centerX = (minX + maxX) / 2;
+		int centerY = (minY + maxY) / 2;
+		int centerZ = (minZ + maxZ) / 2;
+
+		return Point(centerX, centerY, centerZ);
+	}
+};
+
+Matrix dot(const Matrix &a, const Matrix &b)
+{
+	Matrix result = Matrix(a.size(), Vector(b[0].size(), 0));
+	for (int i = 0; i < a.size(); i++)
+	{
+		for (int j = 0; j < b[0].size(); j++)
+		{
+			for (int k = 0; k < b.size(); k++)
+			{
+				result[i][j] += a[i][k] * b[k][j];
+			}
+		}
+	}
+	return result;
+}
+
+Matrix getRotationMatrix(double alpha = 0.001, double beta = 0.002, double gamma = 0.003)
+{
+	Matrix rotationX = {
+		{1, 0, 0},
+		{0, cos(alpha), -sin(alpha)},
+		{0, sin(alpha), cos(alpha)}};
+
+	Matrix rotationY = {
+		{cos(beta), 0, sin(beta)},
+		{0, 1, 0},
+		{-sin(beta), 0, cos(beta)}};
+
+	Matrix rotationZ = {
+		{cos(gamma), -sin(gamma), 0},
+		{sin(gamma), cos(gamma), 0},
+		{0, 0, 1}};
+
+	return dot(rotationZ, dot(rotationY, rotationX));
+}
+
+Matrix GetProjectionMatrix(double aspect, double fov, double far, double near)
+{
+	Matrix prm = {
+		{1 / (aspect * tan(fov / 2)), 0, 0, 0},
+		{0, 1 / (tan(fov / 2)), 0, 0},
+		{0, 0, (far + near) / (far - near), (2 * far * near) / (far - near)},
+		{0, 0, -1, 0}};
+	return prm;
+}
+
+std::vector<std::vector<std::vector<double>>> multiply_and_divide(const std::vector<std::vector<double>> &matrix4x4, const std::vector<std::vector<double>> &matrix3x3)
+{
+	std::vector<std::vector<std::vector<double>>> result(4, std::vector<std::vector<double>>(1, std::vector<double>(4, 0.0)));
+
+	// Multiply 4x4 matrix with 3x3 matrix
+	for (int i = 0; i < 4; ++i)
+	{
+		for (int j = 0; j < 3; ++j)
+		{
+			result[i][0][j] += matrix4x4[i][j] * matrix3x3[j][0];
+		}
+		result[i][0][3] = matrix4x4[i][3]; // Assigning the fourth component from the 4x4 matrix
+	}
+
+	// Divide x, y, z by w
+	for (int i = 0; i < 4; ++i)
+	{
+		double w = result[i][0][3]; // Assuming the fourth component is w
+		if (w != 0)
+		{
+			result[i][0][0] /= w;
+			result[i][0][1] /= w;
+			result[i][0][2] /= w;
+		}
+	}
+
+	return result;
+}
+
+Point transform(const Matrix &matrix, const Point &point)
+{
+	Matrix p = {{point.x}, {point.y}, {point.z}};
+	Matrix r = dot(matrix, p);
+	return Point(r[0][0], r[1][0], r[2][0]);
+}
+
+Point translate(const Point &shift, const Point &point)
+{
+	return Point(
+		point.x + shift.x,
+		point.y + shift.y,
+		point.z + shift.z);
+}
+
+struct cube
+{
+
+	Matrix rotationXYZ;
+
+	std::vector<Side> sides = {};
+
+	Point Get_Center(std::vector<Point> points)
+	{
+		double minX = 9999999;
+		double maxX = -99999999;
+		double minY = 99999999;
+		double maxY = -99999999;
+		double minZ = 99999999;
+		double maxZ = -99999999;
+
+		for (Point p : points)
+		{
+			minX = std::min(minX, p.x);
+			minY = std::min(minY, p.y);
+			minZ = std::min(minZ, p.z);
+			maxX = std::max(maxX, p.x);
+			maxY = std::max(maxY, p.y);
+			maxZ = std::max(maxZ, p.z);
+		}
+
+		// Calculate the center position
+		int centerX = (minX + maxX) / 2;
+		int centerY = (minY + maxY) / 2;
+		int centerZ = (minZ + maxZ) / 2;
+
+		return Point(centerX, centerY, centerZ);
+	}
+
+	cube()
+	{
+		sides.push_back({&_points, ORANGE, 4, 5, 6, 4, 6, 7});
+		sides.push_back({&_points, BLUE, 5, 6, 1, 1, 6, 2});
+		sides.push_back({&_points, GREEN, 6, 7, 2, 2, 7, 3});
+		sides.push_back({&_points, WHITE, 4, 5, 0, 0, 5, 1});
+		sides.push_back({&_points, YELLOW, 3, 4, 7, 3, 4, 0});
+		sides.push_back({&_points, RED, 0, 1, 2, 0, 2, 3});
+	}
+
+	std::vector<Point> _points = {
+		Point(-1, 1, 1),
+		Point(1, 1, 1),
+		Point(1, -1, 1),
+		Point(-1, -1, 1),
+		Point(-1, 1, -1),
+		Point(1, 1, -1),
+		Point(1, -1, -1),
+		Point(-1, -1, -1)};
+};
+
+class Voxel_Model;
+class Voxel : public cube
+{
+  public:
+	int x, y, z;
+	Voxel_Model *vm = nullptr;
+	Voxel(int x, int y, int z, SDL_Color color) : cube()
+	{
+		this->x = x;
+		this->y = y;
+		this->z = z;
+		this->color = color;
+	}
+	Light *light = nullptr;
+	double X, Y, Z;
+	SDL_Color color;
+
+	std::vector<Voxel> *voxels;
+	std::vector<Point> points = _points;
+};
+
+namespace No_Physics
+{
+class Window
+{
+  public:
+	bool operator==(Window o);
+	Window(std::string _name, int _W, int _H, Uint32 flags = SHOWN);
+
+	void _Start();
+	bool _Run();
+
+	virtual void Start() { _Start(); }
+	virtual bool Run() { return _Run(); }
+	virtual void Update() {}
+
+	void Set_Icon(std::string file);
+	bool inView(Point i, int viewBufferPixels = 0);
+
+	void Draw_String(int x, int y, int size, double angle, std::string text, std::string f, SDL_Color color);
+	void Draw(Point point, SDL_Color color);
+	void Draw_Texture(int x, int y, int width, int height, double angle, SDL_Texture *t, SDL_Rect sorcrect = {10, 10, 9, 9}, Layer layer = GAME_LAYER, int DisplayOrder = 99999, SDL_RendererFlip flip = SDL_FLIP_NONE);
+	void Draw_Sprite(int x, int y, int width, int height, double angle, std::string file, SDL_Rect sorcrect = {10, 10, 9, 9}, Layer layer = GAME_LAYER, int DisplayOrder = 99999, SDL_RendererFlip flip = SDL_FLIP_NONE);
+	void Draw_Rect(int X, int Y, int W, int H, SDL_Color color);
+	void Draw_Rect(Point pos, int w, int h, SDL_Color color);
+	void Draw_Line(Point pos, Point pos2, SDL_Color color);
+	void Draw_Circle(int x, int y, int rad, SDL_Color color);
+	void Draw_Animation(int x, int y, int w, int h, double angle, animation *an, int displayOrder = 99999, Layer layer = GAME_LAYER, SDL_RendererFlip flip = SDL_FLIP_NONE);
+	void Draw_Frame(int frameIndex, int x, int y, int w, int h, double angle, animation *an, Layer layer = GAME_LAYER, int displayOrder = 99999, SDL_RendererFlip flip = SDL_FLIP_NONE);
+	void Draw_Sprite_Stack(int x, int y, int w, int h, double angle, Sprite_Stack *s, Layer layer = GAME_LAYER, int displayOrder = 99999, SDL_Rect r = {10, 10, 9, 9}, SDL_RendererFlip flip = SDL_FLIP_NONE);
+	void Draw_Cube(int scale, Point Position, double X, double Y, double Z, SDL_Color color, Point offset = {0, 0, 0}, Point center = {0, 0, 0}, Voxel *v = nullptr);
+	void Fill_Triangle(Point p1, Point p2, Point p3, SDL_Color color, Point offset = {0, 0, 0});
+	void Fill_Rect(int X, int Y, int W, int H, SDL_Color color);
+	void Fill_Rect(Point pos, int W, int H, SDL_Color color);
+	void Clear();
+	bool Event_Loop();
+	void Close();
+	SDL_Texture *loadImage(const char *path);
+	double Get_DT();
+	double Get_FPS();
+	dimensions Get_Dimensions();
+	void Set_MaxFPS(int cap);
+	SDL_Rect Get_String_Rect(int x, int y, int size, double angle, std::string text, std::string f, SDL_Color color);
+	void Allow_Keyboard_Events(bool a);
+
+	key k_a = {SDLK_a};
+	key k_b = {SDLK_b};
+	key k_c = {SDLK_c};
+	key k_d = {SDLK_d};
+	key k_e = {SDLK_e};
+	key k_f = {SDLK_f};
+	key k_g = {SDLK_g};
+	key k_h = {SDLK_h};
+	key k_i = {SDLK_i};
+	key k_j = {SDLK_j};
+	key k_k = {SDLK_k};
+	key k_l = {SDLK_l};
+	key k_m = {SDLK_m};
+	key k_n = {SDLK_n};
+	key k_o = {SDLK_o};
+	key k_p = {SDLK_p};
+	key k_q = {SDLK_q};
+	key k_r = {SDLK_r};
+	key k_s = {SDLK_s};
+	key k_t = {SDLK_t};
+	key k_u = {SDLK_u};
+	key k_v = {SDLK_v};
+	key k_w = {SDLK_w};
+	key k_x = {SDLK_x};
+	key k_y = {SDLK_y};
+	key k_z = {SDLK_z};
+	key k_space = {SDLK_SPACE};
+	key k_enter = {SDLK_RETURN};
+	key k_escape = {SDLK_ESCAPE};
+	key k_shift = {SDLK_LSHIFT};
+	key k_ctrl = {SDLK_LCTRL};
+	key k_alt = {SDLK_LALT};
+	key k_semicolon = {SDLK_SEMICOLON};
+	key k_apostrophe = {SDLK_QUOTE};
+	key k_period = {SDLK_PERIOD};
+	key k_comma = {SDLK_COMMA};
+	key k_slash = {SDLK_SLASH};
+	key k_backslash = {SDLK_BACKSLASH};
+	key k_asterisk = {SDLK_ASTERISK};
+	key k_equals = {SDLK_EQUALS};
+	key k_minus = {SDLK_MINUS};
+	key k_0 = {SDLK_0};
+	key k_1 = {SDLK_1};
+	key k_2 = {SDLK_2};
